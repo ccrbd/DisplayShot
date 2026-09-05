@@ -21,4 +21,5 @@ global using Orientation = System.Windows.Controls.Orientation;
 global using Pen = System.Windows.Media.Pen;
 global using Point = System.Windows.Point;
 global using Size = System.Windows.Size;
+global using TextBox = System.Windows.Controls.TextBox;
 global using VerticalAlignment = System.Windows.VerticalAlignment;
