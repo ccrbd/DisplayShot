@@ -50,13 +50,13 @@ public static class ScreenCapturer
         var width = maxX - minX;
         var height = maxY - minY;
 
-        using var bitmap = new Bitmap(width, height, PixelFormat.Format32bppRgb);
+        using var bitmap = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
         using (var g = Graphics.FromImage(bitmap))
         {
             g.CopyFromScreen(minX, minY, 0, 0, new System.Drawing.Size(width, height), CopyPixelOperation.SourceCopy);
         }
 
-        var data = bitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, PixelFormat.Format32bppRgb);
+        var data = bitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
         try
         {
             var source = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgr32, null,

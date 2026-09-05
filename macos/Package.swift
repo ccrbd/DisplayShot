@@ -13,6 +13,8 @@ let package = Package(
         .target(
             name: "DisplayShotKit",
             path: "Sources/DisplayShotKit",
+            // -enable-testing lets DisplayShotChecks use @testable import; harmless for a local menu-bar app.
+            swiftSettings: [.unsafeFlags(["-enable-testing"])],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("Carbon"),
