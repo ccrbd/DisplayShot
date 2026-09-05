@@ -1,0 +1,22 @@
+# macOS / SwiftPM
+.build/
+.swiftpm/
+*.xcodeproj
+*.xcworkspace
+DerivedData/
+dist/
+*.app
+*.zip
+*.dSYM
+.DS_Store
+
+# Windows / .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+
+# Generated icon intermediates
+assets/build/

@@ -1,0 +1,12 @@
+<Window x:Class="DisplayShot.Overlay.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="False"
+        ShowInTaskbar="False" Topmost="True" Background="Black"
+        Title="DisplayShot" Cursor="Cross" SnapsToDevicePixels="True"
+        UseLayoutRounding="True">
+    <!-- Root is scaled by 1/dpi so that 1 child unit == 1 physical pixel across mixed-DPI monitors. -->
+    <Grid x:Name="Root">
+        <Canvas x:Name="HostCanvas" />
+    </Grid>
+</Window>

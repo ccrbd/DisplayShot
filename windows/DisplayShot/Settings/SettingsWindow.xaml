@@ -1,0 +1,38 @@
+<Window x:Class="DisplayShot.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DisplayShot Settings" Width="520" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" ShowInTaskbar="True">
+    <Grid Margin="20">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="Capture shortcut:" VerticalAlignment="Center" Margin="0,0,10,10" />
+        <TextBox x:Name="HotkeyBox" Grid.Row="0" Grid.Column="1" IsReadOnly="True" Width="220" HorizontalAlignment="Left"
+                 Margin="0,0,0,10" Padding="6,4" ToolTip="Click, then press the new shortcut. Esc cancels."
+                 GotKeyboardFocus="HotkeyBox_GotFocus" LostKeyboardFocus="HotkeyBox_LostFocus" PreviewKeyDown="HotkeyBox_PreviewKeyDown" />
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="Save to:" VerticalAlignment="Center" Margin="0,0,10,10" />
+        <DockPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,10">
+            <Button x:Name="ChooseButton" DockPanel.Dock="Right" Content="Choose…" Padding="10,3" Margin="8,0,0,0" Click="Choose_Click" />
+            <TextBlock x:Name="PathText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        </DockPanel>
+
+        <CheckBox x:Name="SilentCheck" Grid.Row="2" Grid.Column="1" Content="Save without asking (no dialog, straight to the folder)" Margin="0,0,0,8" Click="Silent_Click" />
+        <CheckBox x:Name="SoundCheck" Grid.Row="3" Grid.Column="1" Content="Play a sound after copying or saving" Margin="0,0,0,8" Click="Sound_Click" />
+        <CheckBox x:Name="StartupCheck" Grid.Row="4" Grid.Column="1" Content="Start DisplayShot with Windows" Margin="0,0,0,14" Click="Startup_Click" />
+
+        <TextBlock Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" TextWrapping="Wrap" Foreground="Gray" FontSize="11"
+                   Text="Inside the overlay: drag to select, Ctrl+A full screen, P/L/A/R/M/T/X tools, 1–9 colours, mouse wheel = stroke width, arrows nudge (Shift ×10, Alt resizes), Ctrl+Z undo, Ctrl+C / Enter copy, Ctrl+S save, Esc steps back." />
+    </Grid>
+</Window>

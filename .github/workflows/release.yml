@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set version
+        run: echo "${GITHUB_REF_NAME#v}" > VERSION
+      - name: Build icons
+        run: ./assets/make-icons.sh
+      - name: Build app
+        working-directory: macos
+        run: swift run DisplayShotChecks && ./scripts/build-app.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: macos/dist/DisplayShot-macOS-arm64.zip
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Publish
+        working-directory: windows
+        run: |
+          dotnet test -c Release
+          dotnet publish DisplayShot/DisplayShot.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
+      - name: Zip
+        working-directory: windows/publish
+        run: Compress-Archive -Path DisplayShot.exe -DestinationPath ../../DisplayShot-Windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: DisplayShot-Windows-x64.zip
+
+  release:
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/macos/DisplayShot-macOS-arm64.zip
+            artifacts/windows/DisplayShot-Windows-x64.zip
+          generate_release_notes: true

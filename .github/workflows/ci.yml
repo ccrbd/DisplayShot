@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ip-check:
+    name: IP check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No third-party product references
+        run: bash scripts/check-ip.sh
+
+  macos:
+    name: macOS (build, test, bundle)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show toolchain
+        run: swift --version
+      - name: Build
+        working-directory: macos
+        run: swift build -c release
+      - name: Run checks
+        working-directory: macos
+        run: swift run DisplayShotChecks
+      - name: Generate icons
+        run: ./assets/make-icons.sh
+      - name: Assemble app bundle
+        working-directory: macos
+        run: ./scripts/build-app.sh
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: DisplayShot-macOS-arm64
+          path: macos/dist/DisplayShot-macOS-arm64.zip
+
+  windows:
+    name: Windows (build, test, publish)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore
+        working-directory: windows
+        run: dotnet restore
+      - name: Build
+        working-directory: windows
+        run: dotnet build --no-restore -c Release
+      - name: Test
+        working-directory: windows
+        run: dotnet test --no-build -c Release
+      - name: Publish (win-x64)
+        working-directory: windows
+        run: dotnet publish DisplayShot/DisplayShot.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: DisplayShot-Windows-x64
+          path: windows/publish/DisplayShot.exe

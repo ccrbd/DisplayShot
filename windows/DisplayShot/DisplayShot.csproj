@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- WinForms is used only for the tray NotifyIcon. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>DisplayShot</AssemblyName>
+    <RootNamespace>DisplayShot</RootNamespace>
+    <ApplicationIcon>Assets\DisplayShot.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.1.0</Version>
+    <Authors>ccrbd</Authors>
+    <Product>DisplayShot</Product>
+    <Description>A fast native screenshot tool: capture, annotate, redact, copy.</Description>
+    <Copyright>© 2026 ccrbd. MIT License.</Copyright>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Lets the project restore/build on non-Windows hosts (CI lint, IDEs); it still only runs on Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\DisplayShot.ico" />
+  </ItemGroup>
+
+</Project>
