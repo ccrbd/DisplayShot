@@ -31,4 +31,12 @@
     <Resource Include="Assets\DisplayShot.ico" />
   </ItemGroup>
 
+  <!-- UseWindowsForms is on only for the tray NotifyIcon. Don't import System.Windows.Forms and
+       System.Drawing globally, so their type names never clash with WPF's; the Tray and Capture
+       files import them explicitly. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
 </Project>
