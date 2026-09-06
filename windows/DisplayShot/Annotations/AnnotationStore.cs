@@ -5,9 +5,9 @@ namespace DisplayShot.Annotations;
 public sealed class AnnotationStore
 {
     private abstract record Change;
-    private sealed record Add(Annotation Annotation) : Change;
+    private sealed record AddChange(Annotation Annotation) : Change;
     /// <summary>Removed annotations with the index each had when removed, in removal order.</summary>
-    private sealed record Remove(IReadOnlyList<(int Index, Annotation Annotation)> Removed) : Change;
+    private sealed record RemoveChange(IReadOnlyList<(int Index, Annotation Annotation)> Removed) : Change;
 
     private readonly List<Annotation> _items = new();
     private readonly Stack<Change> _undo = new();
@@ -22,7 +22,7 @@ public sealed class AnnotationStore
     public void Add(Annotation annotation)
     {
         _items.Add(annotation);
-        _undo.Push(new Add(annotation));
+        _undo.Push(new AddChange(annotation));
         _redo.Clear();
     }
 
@@ -41,7 +41,7 @@ public sealed class AnnotationStore
     {
         if (_group is { Count: > 0 } g)
         {
-            _undo.Push(new Remove(g.ToList()));
+            _undo.Push(new RemoveChange(g.ToList()));
             _redo.Clear();
         }
         _group = null;
@@ -55,7 +55,7 @@ public sealed class AnnotationStore
         var removed = _items[i];
         _items.RemoveAt(i);
         if (_group is not null) _group.Add((i, removed));
-        else { _undo.Push(new Remove(new[] { (i, removed) })); _redo.Clear(); }
+        else { _undo.Push(new RemoveChange(new[] { (i, removed) })); _redo.Clear(); }
     }
 
     public bool Undo()
@@ -64,7 +64,7 @@ public sealed class AnnotationStore
         var change = _undo.Pop();
         switch (change)
         {
-            case Add add: _items.RemoveAll(a => a.Id == add.Annotation.Id); break;
+            case AddChange add: _items.RemoveAll(a => a.Id == add.Annotation.Id); break;
             case Remove rm:
                 // Reinsert in reverse removal order so every recorded index is valid again.
                 foreach (var (index, annotation) in Enumerable.Reverse(rm.Removed)) _items.Insert(Math.Min(index, _items.Count), annotation);
@@ -80,8 +80,8 @@ public sealed class AnnotationStore
         var change = _redo.Pop();
         switch (change)
         {
-            case Add add: _items.Add(add.Annotation); break;
-            case Remove rm:
+            case AddChange add: _items.Add(add.Annotation); break;
+            case RemoveChange rm:
                 var ids = rm.Removed.Select(e => e.Annotation.Id).ToHashSet();
                 _items.RemoveAll(a => ids.Contains(a.Id));
                 break;
