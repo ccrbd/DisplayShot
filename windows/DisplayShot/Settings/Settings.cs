@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows.Input;
 using DisplayShot.Annotations;
+using DisplayShot.Export;
 using DisplayShot.Hotkeys;
 
 namespace DisplayShot.Configuration;
@@ -23,6 +24,10 @@ public sealed class Settings
     public bool PlaySound { get; set; } = true;
     public Dictionary<string, double> ToolWidths { get; set; } = new();
     public int LastColorIndex { get; set; }
+    /// <summary>Format the save dialog defaults to; silent save always uses it.</summary>
+    public ImageFormat SaveFormat { get; set; } = ImageFormat.Jpeg;
+    public RedactMode RedactMode { get; set; } = RedactMode.Pixelate;
+    public string LastEmoji { get; set; } = "👍";
 
     [JsonIgnore]
     public Hotkey Hotkey

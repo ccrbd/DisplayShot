@@ -33,6 +33,15 @@ public sealed class AnnotationStore
         return true;
     }
 
+    public Annotation? Item(Guid id) => _items.FirstOrDefault(a => a.Id == id);
+
+    /// <summary>Replaces an existing annotation in place (move/resize/rotate an emoji).</summary>
+    public void Replace(Guid id, Annotation annotation)
+    {
+        var i = _items.FindIndex(a => a.Id == id);
+        if (i >= 0) _items[i] = annotation;
+    }
+
     public void Clear()
     {
         _items.Clear();

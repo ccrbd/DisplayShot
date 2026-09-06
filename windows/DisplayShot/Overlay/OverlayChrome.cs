@@ -23,6 +23,9 @@ public static class OverlayChrome
         Color.FromRgb(0x8E, 0x8E, 0x93),
     };
 
+    public static readonly string[] EmojiPresets =
+        { "👍", "❤️", "😀", "😂", "🔥", "✅", "❌", "⭐", "👉", "⚠️", "💡", "🎯", "📌", "❓" };
+
     private static Brush Freeze(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 
     public static Border Panel(UIElement child) => new()

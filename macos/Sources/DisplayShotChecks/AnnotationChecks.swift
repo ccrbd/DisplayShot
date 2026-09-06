@@ -47,6 +47,25 @@ enum AnnotationChecks {
                 guard case .redact(_, .blur, let block) = r.kind else { throw CheckFailure(description: "not redact") }
                 try expectEqual(block, 12)
             }
+            Checks.run("emoji annotation: meaningful, width = size, tools do not drag it") {
+                let e = Annotation(.emoji(EmojiAnnotation(center: .zero, string: "⭐", size: 40, rotation: 0)))
+                try expect(e.isMeaningful)
+                guard case .emoji(let resized) = e.withWidth(64).kind else { throw CheckFailure(description: "not emoji") }
+                try expectEqual(resized.size, 64)
+                try expect(DrawingTools.begin(.emoji, at: .zero, color: CGColor(gray: 1, alpha: 1), width: 40, blur: false) == nil)
+                try expectEqual(ToolKind.emoji.key, "e")
+                try expectEqual(RedactMode.allCases.count, 3)
+            }
+            Checks.run("store replace keeps order") {
+                let store = AnnotationStore()
+                store.add(line(1)); let target = line(2); store.add(target); store.add(line(3))
+                var moved = target
+                moved.kind = .line(CGPoint(x: 9, y: 9), CGPoint(x: 9, y: 19), stroke)
+                store.replace(id: target.id, with: moved)
+                guard case .line(let a, _, _) = store.items[1].kind else { throw CheckFailure(description: "wrong kind") }
+                try expectEqual(a.x, 9)
+                try expectEqual(store.items.count, 3)
+            }
             Checks.run("45° snapping keeps length") {
                 let snapped = snapAngle(from: .zero, to: CGPoint(x: 100, y: 8))
                 try expectEqual(snapped.y, 0, accuracy: 0.001)

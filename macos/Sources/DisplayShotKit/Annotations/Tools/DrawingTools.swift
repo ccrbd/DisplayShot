@@ -12,7 +12,7 @@ enum DrawingTools {
         case .arrow: return Annotation(.arrow(p, p, stroke))
         case .rectangle: return Annotation(.rectangle(CGRect(origin: p, size: .zero), stroke))
         case .redact: return Annotation(.redact(CGRect(origin: p, size: .zero), blur ? .blur : .pixelate, width))
-        case .text: return nil
+        case .text, .emoji: return nil
         }
     }
 
@@ -35,7 +35,7 @@ enum DrawingTools {
             copy.kind = .rectangle(rect(from: origin, to: p, square: constrain), s)
         case .redact(_, _, let block):
             copy.kind = .redact(CGRect(corner: origin, p), constrain ? .blur : .pixelate, block)
-        case .text:
+        case .text, .emoji:
             break
         }
         return copy

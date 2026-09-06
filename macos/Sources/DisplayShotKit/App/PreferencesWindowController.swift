@@ -10,6 +10,7 @@ final class PreferencesWindowController: NSWindowController {
     private let soundCheckbox = NSButton(checkboxWithTitle: "Play a sound after copying or saving", target: nil, action: nil)
     private let loginCheckbox = NSButton(checkboxWithTitle: "Launch DisplayShot at login", target: nil, action: nil)
     private lazy var recorder = HotKeyRecorderView(hotKey: prefs.hotKey)
+    private let formatPopup = NSPopUpButton(frame: .zero, pullsDown: false)
 
     init(prefs: Preferences) {
         self.prefs = prefs
@@ -41,6 +42,11 @@ final class PreferencesWindowController: NSWindowController {
         pathRow.orientation = .horizontal
         pathRow.spacing = 8
 
+        for f in ImageFormat.allCases { formatPopup.addItem(withTitle: f.title) }
+        formatPopup.selectItem(at: ImageFormat.allCases.firstIndex(of: prefs.saveFormat) ?? 0)
+        formatPopup.target = self
+        formatPopup.action = #selector(formatChanged)
+
         silentCheckbox.state = prefs.saveWithoutAsking ? .on : .off
         silentCheckbox.target = self
         silentCheckbox.action = #selector(toggleSilent)
@@ -54,6 +60,7 @@ final class PreferencesWindowController: NSWindowController {
         let grid = NSGridView(views: [
             [label("Capture shortcut:"), recorder],
             [label("Save to:"), pathRow],
+            [label("Format:"), formatPopup],
             [NSGridCell.emptyContentView, silentCheckbox],
             [NSGridCell.emptyContentView, soundCheckbox],
             [NSGridCell.emptyContentView, loginCheckbox],
@@ -65,7 +72,7 @@ final class PreferencesWindowController: NSWindowController {
         grid.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(grid)
 
-        let hint = NSTextField(wrappingLabelWithString: "Inside the overlay: drag to select, ⌘A full screen, P/L/A/R/M/T/X tools, 1–9 colours, scroll wheel stroke width, arrows nudge, ⌘Z undo, ⌘C copy, ⌘S save, Esc back.")
+        let hint = NSTextField(wrappingLabelWithString: "Inside the overlay: drag to select, ⌘A full screen, P/L/A/R/M/T/E/X tools, 1–9 colours, scroll wheel stroke width, arrows nudge, ⌘Z undo, ⌘C copy, ⌘S save, Esc back.")
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .secondaryLabelColor
         hint.translatesAutoresizingMaskIntoConstraints = false
@@ -108,6 +115,8 @@ final class PreferencesWindowController: NSWindowController {
             pathField.stringValue = displayPath(url)
         }
     }
+
+    @objc private func formatChanged() { prefs.saveFormat = ImageFormat.allCases[formatPopup.indexOfSelectedItem] }
 
     @objc private func toggleSilent() { prefs.saveWithoutAsking = silentCheckbox.state == .on }
     @objc private func toggleSound() { prefs.playSound = soundCheckbox.state == .on }

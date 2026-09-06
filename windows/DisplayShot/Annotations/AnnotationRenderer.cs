@@ -10,6 +10,7 @@ public static class AnnotationRenderer
 {
     public const double MarkerAlpha = 0.35;
     private static readonly Typeface TextTypeface = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+    private static readonly Typeface EmojiTypeface = new(new FontFamily("Segoe UI Emoji"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
 
     /// <summary>Draws everything except redactions (pixel operations handled by ImageComposer).
     /// Markers are grouped so overlapping strokes never double-darken.</summary>
@@ -65,6 +66,9 @@ public static class AnnotationRenderer
                 break;
             case TextAnnotation text:
                 DrawText(dc, text);
+                break;
+            case EmojiAnnotation emoji:
+                DrawEmoji(dc, emoji);
                 break;
         }
     }
@@ -134,6 +138,14 @@ public static class AnnotationRenderer
         }
         head.Freeze();
         dc.DrawGeometry(new SolidColorBrush(s.Color), null, head);
+    }
+
+    public static void DrawEmoji(DrawingContext dc, EmojiAnnotation e)
+    {
+        var ft = new FormattedText(e.Text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, EmojiTypeface, e.Size, new SolidColorBrush(e.Color), 1.0);
+        dc.PushTransform(new RotateTransform(e.Rotation, e.Center.X, e.Center.Y));
+        dc.DrawText(ft, new Point(e.Center.X - ft.Width / 2, e.Center.Y - ft.Height / 2));
+        dc.Pop();
     }
 
     public static FormattedText MakeFormattedText(TextAnnotation t, Brush brush) =>

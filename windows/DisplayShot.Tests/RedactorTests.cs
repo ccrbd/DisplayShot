@@ -61,6 +61,18 @@ public class RedactorTests
     }
 
     [Fact]
+    public void Blackout_IsSolidOpaqueBlack()
+    {
+        var r = new Int32Rect(0, 0, 4, 3);
+        var px = Redactor.Blackout(r);
+        Assert.Equal(4 * 4 * 3, px.Length);
+        for (var i = 0; i < px.Length; i += 4)
+        {
+            Assert.Equal(0, px[i]); Assert.Equal(0, px[i + 1]); Assert.Equal(0, px[i + 2]); Assert.Equal(255, px[i + 3]);
+        }
+    }
+
+    [Fact]
     public void Intersect()
     {
         Assert.Equal(new Int32Rect(5, 5, 5, 5), Redactor.Intersect(new Int32Rect(0, 0, 10, 10), new Int32Rect(5, 5, 20, 20)));

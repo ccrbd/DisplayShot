@@ -54,6 +54,8 @@ enum AnnotationRenderer {
             ctx.stroke(r)
         case .text(let t):
             drawText(t, in: ctx)
+        case .emoji(let e):
+            drawEmoji(e, in: ctx)
         case .redact:
             break
         }
@@ -125,6 +127,20 @@ enum AnnotationRenderer {
 
     static func textSize(_ t: TextAnnotation) -> CGSize {
         NSAttributedString(string: t.string, attributes: textAttributes(t)).size()
+    }
+
+    static func emojiAttributes(_ e: EmojiAnnotation) -> [NSAttributedString.Key: Any] {
+        [.font: NSFont.systemFont(ofSize: e.size)]
+    }
+
+    static func drawEmoji(_ e: EmojiAnnotation, in ctx: CGContext) {
+        let str = NSAttributedString(string: e.string, attributes: emojiAttributes(e))
+        let size = str.size()
+        ctx.saveGState()
+        ctx.translateBy(x: e.center.x, y: e.center.y)
+        ctx.rotate(by: e.rotation * .pi / 180)
+        str.draw(at: CGPoint(x: -size.width / 2, y: -size.height / 2))
+        ctx.restoreGState()
     }
 
     static func drawText(_ t: TextAnnotation, in ctx: CGContext) {

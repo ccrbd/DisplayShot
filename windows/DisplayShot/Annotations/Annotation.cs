@@ -3,9 +3,20 @@ using System.Windows.Media;
 
 namespace DisplayShot.Annotations;
 
-public enum ToolKind { Pen, Line, Arrow, Rectangle, Marker, Text, Redact }
+public enum ToolKind { Pen, Line, Arrow, Rectangle, Marker, Text, Emoji, Redact }
 
-public enum RedactMode { Pixelate, Blur }
+public enum RedactMode { Pixelate, Blur, Blackout }
+
+public static class RedactModeExtensions
+{
+    public static string Title(this RedactMode mode) => mode switch
+    {
+        RedactMode.Pixelate => "Mosaic (pixelate)",
+        RedactMode.Blur => "Blur",
+        RedactMode.Blackout => "Blackout",
+        _ => mode.ToString(),
+    };
+}
 
 public static class ToolKindExtensions
 {
@@ -20,6 +31,7 @@ public static class ToolKindExtensions
         ToolKind.Rectangle => 3,
         ToolKind.Marker => 14,
         ToolKind.Text => 18,
+        ToolKind.Emoji => 48,
         ToolKind.Redact => 8,
         _ => 3,
     };
@@ -27,6 +39,7 @@ public static class ToolKindExtensions
     public static (double Min, double Max) WidthRange(this ToolKind tool) => tool switch
     {
         ToolKind.Text => (8, 96),
+        ToolKind.Emoji => (16, 256),
         ToolKind.Redact => (2, 64),
         _ => (1, 32),
     };
@@ -39,6 +52,7 @@ public static class ToolKindExtensions
         ToolKind.Rectangle => "Rectangle",
         ToolKind.Marker => "Marker",
         ToolKind.Text => "Text",
+        ToolKind.Emoji => "Emoji",
         ToolKind.Redact => "Redact",
         _ => tool.ToString(),
     };
@@ -52,6 +66,7 @@ public static class ToolKindExtensions
         ToolKind.Rectangle => 'R',
         ToolKind.Marker => 'M',
         ToolKind.Text => 'T',
+        ToolKind.Emoji => 'E',
         ToolKind.Redact => 'X',
         _ => '?',
     };
@@ -105,7 +120,18 @@ public sealed record TextAnnotation(Point Origin, string Text, Color Color, doub
     public override Annotation WithWidth(double width) => this with { FontSize = width };
 }
 
-/// <summary>Rect, mode and block size (pixels) of a pixelate/blur region.</summary>
+/// <summary>A single emoji stamped on the canvas; Size is the font size, Rotation in degrees.
+/// WPF renders emoji as monochrome glyphs, so the annotation colour is used as the fill.</summary>
+public sealed record EmojiAnnotation(Point Center, string Text, double Size, double Rotation, Color Color) : Annotation
+{
+    public override bool IsMeaningful => !string.IsNullOrEmpty(Text) && Size > 0;
+    public override Annotation WithWidth(double width) => this with { Size = width };
+
+    /// <summary>Unrotated bounding box used for hit-testing.</summary>
+    public Rect Bounds => new(Center.X - Size * 0.6, Center.Y - Size * 0.6, Size * 1.2, Size * 1.2);
+}
+
+/// <summary>Rect, mode and block size (pixels) of a pixelate/blur/blackout region.</summary>
 public sealed record RedactAnnotation(Rect Rect, RedactMode Mode, double Block) : Annotation
 {
     public override bool IsMeaningful => Rect.Width >= 2 && Rect.Height >= 2;

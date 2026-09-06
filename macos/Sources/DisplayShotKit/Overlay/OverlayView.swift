@@ -9,6 +9,8 @@ final class OverlayView: NSView {
     private let palette = ToolPalette()
     private let actionBar = ActionBar()
     private let colorStrip = ColorStrip()
+    private let emojiStrip = EmojiStrip()
+    private var emojiReceiver: EmojiReceiverView?
     private let widthBadge = StrokeWidthBadge()
     private let errorLabel = NSTextField(labelWithString: "")
     private var textEditor: InlineTextView?
@@ -28,7 +30,7 @@ final class OverlayView: NSView {
         wantsLayer = true
         layerContentsRedrawPolicy = .onSetNeedsDisplay
 
-        for v in [palette, actionBar, colorStrip] as [NSView] {
+        for v in [palette, actionBar, colorStrip, emojiStrip] as [NSView] {
             v.isHidden = true
             addSubview(v)
         }
@@ -47,6 +49,9 @@ final class OverlayView: NSView {
         palette.onSelectTool = { [weak self] tool in self?.session.selectTool(tool) }
         palette.onToggleColors = { [weak self] in self?.session.toggleColorStrip() }
         palette.onUndo = { [weak self] in self?.session.undo() }
+        palette.onSelectRedactMode = { [weak self] mode in self?.session.setRedactMode(mode) }
+        emojiStrip.onPick = { [weak self] emoji in self?.session.setEmoji(emoji) }
+        emojiStrip.onMore = { [weak self] in self?.session.beginEmojiPick() }
         actionBar.onCopy = { [weak self] in self?.session.copyToClipboard() }
         actionBar.onSave = { [weak self] in self?.session.save() }
         actionBar.onCancel = { [weak self] in self?.session.cancel() }
@@ -91,7 +96,18 @@ final class OverlayView: NSView {
     override func mouseMoved(with event: NSEvent) {
         let p = location(event)
         session.mouseMoved(at: p, index: index)
-        session.cursor(at: p, index: index).set()
+        if isOverChrome(p) {
+            NSCursor.arrow.set()
+        } else {
+            session.cursor(at: p, index: index).set()
+        }
+    }
+
+    private func isOverChrome(_ p: CGPoint) -> Bool {
+        for v in [palette, actionBar, colorStrip, emojiStrip] as [NSView] where !v.isHidden && v.frame.contains(p) { return true }
+        if let tv = textEditor, tv.frame.contains(p) { return true }
+        if let er = emojiReceiver, er.frame.contains(p) { return true }
+        return false
     }
 
     override func scrollWheel(with event: NSEvent) { session.scroll(event) }
@@ -184,9 +200,12 @@ final class OverlayView: NSView {
             .foregroundColor: NSColor(white: 1, alpha: 0.85),
         ]
         let size = (text as NSString).size(withAttributes: attrs)
-        let rect = CGRect(x: bounds.midX - size.width / 2 - 14, y: bounds.midY - size.height / 2 - 8,
+        // 10 % above centre so the box does not cover what people usually want to capture,
+        // and translucent so the frozen screen stays visible through it.
+        let centerY = bounds.height * 0.40
+        let rect = CGRect(x: bounds.midX - size.width / 2 - 14, y: centerY - size.height / 2 - 8,
                           width: size.width + 28, height: size.height + 16)
-        Palette.chrome.setFill()
+        Palette.chrome.withAlphaComponent(0.55).setFill()
         NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8).fill()
         (text as NSString).draw(at: CGPoint(x: rect.minX + 14, y: rect.minY + 8), withAttributes: attrs)
     }
@@ -211,6 +230,7 @@ final class OverlayView: NSView {
         palette.isHidden = !show
         actionBar.isHidden = !show
         colorStrip.isHidden = !(show && session.colorStripVisible)
+        emojiStrip.isHidden = !(show && session.activeTool == .emoji)
 
         if active, let model = session.selection {
             let sel = model.rect
@@ -230,8 +250,16 @@ final class OverlayView: NSView {
             if x < bounds.minX { x = layout.palette.maxX + ToolbarLayout.gap }
             colorStrip.frame = CGRect(x: x, y: y, width: stripSize.width, height: stripSize.height).fitted(in: bounds)
 
-            palette.update(selectedTool: session.activeTool, color: session.color, canUndo: session.store.canUndo)
+            let emojiSize = EmojiStrip.intrinsicSize
+            let eb = palette.buttonFrame(for: .emoji)
+            let ey = layout.palette.minY + eb.midY - emojiSize.height / 2
+            var ex = layout.palette.minX - ToolbarLayout.gap - emojiSize.width
+            if ex < bounds.minX { ex = layout.palette.maxX + ToolbarLayout.gap }
+            emojiStrip.frame = CGRect(x: ex, y: ey, width: emojiSize.width, height: emojiSize.height).fitted(in: bounds)
+
+            palette.update(selectedTool: session.activeTool, color: session.color, canUndo: session.store.canUndo, redactMode: session.redactMode)
             colorStrip.update(selectedIndex: session.colorIndex)
+            emojiStrip.update(selected: session.currentEmoji)
         } else {
             labelText = ""
         }
@@ -256,6 +284,23 @@ final class OverlayView: NSView {
         if window?.firstResponder === tv { window?.makeFirstResponder(self) }
         tv.removeFromSuperview()
         textEditor = nil
+    }
+
+    func showEmojiReceiver() {
+        removeEmojiReceiver()
+        let origin = emojiStrip.isHidden ? CGPoint(x: bounds.midX, y: bounds.midY) : CGPoint(x: emojiStrip.frame.minX, y: emojiStrip.frame.maxY + 6)
+        let er = EmojiReceiverView.make(at: origin)
+        er.onPick = { [weak self] emoji in self?.session.finishEmojiPick(emoji) }
+        addSubview(er)
+        emojiReceiver = er
+        window?.makeFirstResponder(er)
+    }
+
+    func removeEmojiReceiver() {
+        guard let er = emojiReceiver else { return }
+        if window?.firstResponder === er { window?.makeFirstResponder(self) }
+        er.removeFromSuperview()
+        emojiReceiver = nil
     }
 
     var textEditorString: String { textEditor?.string ?? "" }

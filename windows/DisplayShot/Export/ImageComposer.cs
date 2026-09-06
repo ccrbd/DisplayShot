@@ -115,6 +115,22 @@ public static class ImageComposer
         return new Int32Rect(x0, y0, Math.Max(0, x1 - x0), Math.Max(0, y1 - y0));
     }
 
+    public static byte[] Encode(BitmapSource image, ImageFormat format)
+    {
+        BitmapEncoder encoder = format switch
+        {
+            ImageFormat.Jpeg => new JpegBitmapEncoder { QualityLevel = 92 },
+            ImageFormat.Tiff => new TiffBitmapEncoder(),
+            _ => new PngBitmapEncoder(),
+        };
+        // JPEG has no alpha: flatten onto white first (the image is opaque anyway).
+        var source = format == ImageFormat.Jpeg ? new FormatConvertedBitmap(image, PixelFormats.Bgr24, null, 0) : image;
+        encoder.Frames.Add(BitmapFrame.Create(source));
+        using var ms = new MemoryStream();
+        encoder.Save(ms);
+        return ms.ToArray();
+    }
+
     public static byte[] EncodePng(BitmapSource image)
     {
         var encoder = new PngBitmapEncoder();

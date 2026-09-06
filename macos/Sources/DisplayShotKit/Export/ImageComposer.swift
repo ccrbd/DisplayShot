@@ -57,6 +57,17 @@ enum ImageComposer {
         ctx.restoreGState()
     }
 
+    /// Encodes in the requested format (JPEG at quality 0.92; the image is opaque so no alpha is lost).
+    static func data(_ image: CGImage, format: ImageFormat) -> Data? {
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(data, format.utType.identifier as CFString, 1, nil) else { return nil }
+        var options: [CFString: Any] = [:]
+        if format == .jpeg { options[kCGImageDestinationLossyCompressionQuality] = 0.92 }
+        CGImageDestinationAddImage(dest, image, options as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return data as Data
+    }
+
     static func pngData(_ image: CGImage) -> Data? {
         let data = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else { return nil }

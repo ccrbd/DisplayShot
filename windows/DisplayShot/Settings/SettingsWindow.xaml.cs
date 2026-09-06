@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using DisplayShot.Configuration;
+using DisplayShot.Export;
 using DisplayShot.Hotkeys;
 
 namespace DisplayShot;
@@ -21,6 +22,15 @@ public partial class SettingsWindow : Window
         SilentCheck.IsChecked = _settings.SaveWithoutAsking;
         SoundCheck.IsChecked = _settings.PlaySound;
         StartupCheck.IsChecked = StartupRegistrar.IsEnabled;
+        foreach (var f in ImageFormatExtensions.All) FormatBox.Items.Add(f.Title());
+        FormatBox.SelectedIndex = ImageFormatExtensions.All.ToList().IndexOf(_settings.SaveFormat);
+    }
+
+    private void Format_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (FormatBox.SelectedIndex < 0) return;
+        _settings.SaveFormat = ImageFormatExtensions.All[FormatBox.SelectedIndex];
+        _settings.Save();
     }
 
     private void HotkeyBox_GotFocus(object sender, KeyboardFocusChangedEventArgs e)

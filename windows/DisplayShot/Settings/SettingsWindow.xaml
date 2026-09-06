@@ -15,6 +15,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0" Grid.Column="0" Text="Capture shortcut:" VerticalAlignment="Center" Margin="0,0,10,10" />
@@ -28,11 +29,14 @@
             <TextBlock x:Name="PathText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
         </DockPanel>
 
-        <CheckBox x:Name="SilentCheck" Grid.Row="2" Grid.Column="1" Content="Save without asking (no dialog, straight to the folder)" Margin="0,0,0,8" Click="Silent_Click" />
-        <CheckBox x:Name="SoundCheck" Grid.Row="3" Grid.Column="1" Content="Play a sound after copying or saving" Margin="0,0,0,8" Click="Sound_Click" />
-        <CheckBox x:Name="StartupCheck" Grid.Row="4" Grid.Column="1" Content="Start DisplayShot with Windows" Margin="0,0,0,14" Click="Startup_Click" />
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="Format:" VerticalAlignment="Center" Margin="0,0,10,10" />
+        <ComboBox x:Name="FormatBox" Grid.Row="2" Grid.Column="1" Width="120" HorizontalAlignment="Left" Margin="0,0,0,10" SelectionChanged="Format_Changed" />
 
-        <TextBlock Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" TextWrapping="Wrap" Foreground="Gray" FontSize="11"
-                   Text="Inside the overlay: drag to select, Ctrl+A full screen, P/L/A/R/M/T/X tools, 1–9 colours, mouse wheel = stroke width, arrows nudge (Shift ×10, Alt resizes), Ctrl+Z undo, Ctrl+C / Enter copy, Ctrl+S save, Esc steps back." />
+        <CheckBox x:Name="SilentCheck" Grid.Row="3" Grid.Column="1" Content="Save without asking (no dialog, straight to the folder)" Margin="0,0,0,8" Click="Silent_Click" />
+        <CheckBox x:Name="SoundCheck" Grid.Row="4" Grid.Column="1" Content="Play a sound after copying or saving" Margin="0,0,0,8" Click="Sound_Click" />
+        <CheckBox x:Name="StartupCheck" Grid.Row="5" Grid.Column="1" Content="Start DisplayShot with Windows" Margin="0,0,0,14" Click="Startup_Click" />
+
+        <TextBlock Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2" TextWrapping="Wrap" Foreground="Gray" FontSize="11"
+                   Text="Inside the overlay: drag to select, Ctrl+A full screen, P/L/A/R/M/T/E/X tools, 1–9 colours, mouse wheel = stroke width, arrows nudge (Shift ×10, Alt resizes), Ctrl+Z undo, Ctrl+C / Enter copy, Ctrl+S save, Esc steps back." />
     </Grid>
 </Window>

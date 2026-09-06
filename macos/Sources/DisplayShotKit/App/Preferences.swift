@@ -17,6 +17,9 @@ final class Preferences {
         static let playSound = "playSound"
         static let toolWidths = "toolWidths"
         static let lastColorIndex = "lastColorIndex"
+        static let saveFormat = "saveFormat"
+        static let redactMode = "redactMode"
+        static let lastEmoji = "lastEmoji"
     }
 
     var hotKey: HotKey {
@@ -63,6 +66,22 @@ final class Preferences {
             for (k, v) in newValue { raw[k.rawValue] = Double(v) }
             defaults.set(raw, forKey: Key.toolWidths)
         }
+    }
+
+    /// Format used by "Save": the save panel defaults to it, silent save always uses it.
+    var saveFormat: ImageFormat {
+        get { ImageFormat(rawValue: defaults.string(forKey: Key.saveFormat) ?? "") ?? .jpeg }
+        set { defaults.set(newValue.rawValue, forKey: Key.saveFormat) }
+    }
+
+    var redactMode: RedactMode {
+        get { RedactMode(rawValue: defaults.string(forKey: Key.redactMode) ?? "") ?? .pixelate }
+        set { defaults.set(newValue.rawValue, forKey: Key.redactMode) }
+    }
+
+    var lastEmoji: String {
+        get { defaults.string(forKey: Key.lastEmoji) ?? "👍" }
+        set { defaults.set(newValue, forKey: Key.lastEmoji) }
     }
 
     var lastColorIndex: Int {

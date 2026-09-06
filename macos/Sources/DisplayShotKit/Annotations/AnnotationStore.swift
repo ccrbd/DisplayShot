@@ -28,6 +28,14 @@ final class AnnotationStore {
         return true
     }
 
+    func item(id: UUID) -> Annotation? { items.first { $0.id == id } }
+
+    /// Replaces an existing annotation in place (used to move/resize/rotate an emoji).
+    func replace(id: UUID, with annotation: Annotation) {
+        guard let i = items.firstIndex(where: { $0.id == id }) else { return }
+        items[i] = annotation
+    }
+
     func clear() {
         items.removeAll()
         redoStack.removeAll()

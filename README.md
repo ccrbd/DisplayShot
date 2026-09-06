@@ -17,13 +17,16 @@ needed, and get it onto your clipboard or disk in a second. No accounts, no clou
 - **Global hotkey** freezes the screen behind a dimmed overlay, instantly.
 - **Selection** by click-and-drag, `⌘A` / `Ctrl+A` to snap to the full screen, eight resize handles,
   and drag to reposition. A live `W × H` readout follows the box.
-- **Annotation tools**: pen, line, arrow, rectangle, highlighter, and inline text.
-- **Redaction**: pixelate or blur to hide passwords, tokens and emails. The pixels are destroyed in
-  the exported image, so nothing is recoverable.
+- **Annotation tools**: pen, line, arrow, rectangle, highlighter, inline text, and emoji stamps
+  (resize with the wheel, rotate with `[` / `]`, drag to move).
+- **Redaction**: mosaic (default), blur, or blackout to hide passwords, tokens and emails.
+  Right-click the redact tool to switch. The pixels are destroyed in the exported image, so
+  nothing is recoverable.
 - **Colour palette** with keys `1`–`9`, plus a custom colour picker.
 - **Mouse wheel** changes the current tool's stroke width on the fly.
 - **Undo / redo** annotations one step at a time.
-- **Copy** to the clipboard or **save** as PNG, then the overlay closes.
+- **Copy** to the clipboard or **save** as JPEG, PNG or TIFF (chooser in the save dialog), then
+  the overlay closes.
 
 Deliberately left out: cloud upload, printing, and reverse image search.
 
@@ -37,12 +40,13 @@ uses `⌥`).
 | Open capture overlay | `⌘⇧1` (default) | `PrtScn` (default) |
 | Select full screen | `⌘A` | `Ctrl+A` |
 | Copy and close | `⌘C` or `Return` | `Ctrl+C` or `Enter` |
-| Save as PNG and close | `⌘S` | `Ctrl+S` |
+| Save (JPEG/PNG/TIFF) and close | `⌘S` | `Ctrl+S` |
 | Undo / redo | `⌘Z` / `⌘⇧Z` | `Ctrl+Z` / `Ctrl+Shift+Z` |
-| Step back / cancel | `Esc` | `Esc` |
+| Cancel / close | `Esc` | `Esc` |
 | Pen / Line / Arrow | `P` / `L` / `A` | `P` / `L` / `A` |
 | Rectangle / Marker | `R` / `M` | `R` / `M` |
-| Text / Redact | `T` / `X` | `T` / `X` |
+| Text / Emoji / Redact | `T` / `E` / `X` | `T` / `E` / `X` |
+| Rotate last emoji | `[` / `]` or `⌥`+wheel | `[` / `]` or `Alt`+wheel |
 | Move tool (no drawing) | `V` | `V` |
 | Pick colour | `1`–`9` | `1`–`9` |
 | Nudge selection 1 px / 10 px | arrows / `⇧`+arrows | arrows / `Shift`+arrows |
@@ -50,8 +54,11 @@ uses `⌥`).
 | Stroke width | mouse wheel | mouse wheel |
 | Constrain (square / 45° / blur) | hold `⇧` while dragging | hold `Shift` while dragging |
 
-`Esc` steps back one level at a time: cancel the shape you're drawing, then the text box, then the
-active tool, then the selection, and finally close the overlay.
+`Esc` cancels whatever you are in the middle of (a shape being drawn, a text box, an emoji pick,
+the colour strip); otherwise it closes the overlay immediately.
+
+On Windows, emoji stamps render as monochrome glyphs in the current colour (WPF has no colour-font
+support); on macOS they are full-colour.
 
 ## Install
 

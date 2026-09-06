@@ -40,9 +40,12 @@ public sealed class Redactor
         if (_cache.TryGetValue(key, out var cached)) return cached;
         if (_cache.Count > 256) _cache.Clear();
 
-        var pixels = mode == Annotations.RedactMode.Pixelate
-            ? Pixelate(_sourcePixels!, _sourceStride, source.PixelWidth, source.PixelHeight, r, block)
-            : Blur(_sourcePixels!, _sourceStride, source.PixelWidth, source.PixelHeight, r, (int)Math.Round(block * 1.5));
+        var pixels = mode switch
+        {
+            Annotations.RedactMode.Pixelate => Pixelate(_sourcePixels!, _sourceStride, source.PixelWidth, source.PixelHeight, r, block),
+            Annotations.RedactMode.Blur => Blur(_sourcePixels!, _sourceStride, source.PixelWidth, source.PixelHeight, r, (int)Math.Round(block * 1.5)),
+            _ => Blackout(r),
+        };
         var bmp = BitmapSource.Create(r.Width, r.Height, 96, 96, PixelFormats.Bgr32, null, pixels, r.Width * 4);
         bmp.Freeze();
         var patch = new Patch(bmp, r);
@@ -195,6 +198,14 @@ public sealed class Redactor
                 }
             }
         }
+    }
+
+    /// <summary>Solid black (opaque) patch.</summary>
+    internal static byte[] Blackout(Int32Rect r)
+    {
+        var dst = new byte[r.Width * 4 * r.Height];
+        for (var i = 3; i < dst.Length; i += 4) dst[i] = 255;
+        return dst;
     }
 
     private static int FloorDiv(int a, int b) => (int)Math.Floor(a / (double)b);

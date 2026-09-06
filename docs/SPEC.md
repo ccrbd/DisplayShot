@@ -9,8 +9,10 @@ capture space: points × backing scale on macOS (one overlay per display), physi
 1. A global hotkey triggers a capture.
 2. The app grabs every display into a frozen image, then shows a borderless full-screen overlay that
    paints the frozen image dimmed (black at 45%). The overlay itself never appears in the shot.
-3. The user selects, annotates, and exports. The overlay closes on copy, save, or cancel.
-4. The app keeps running in the menu bar / tray.
+3. Before a selection exists, a translucent hint ("Drag to select an area · full-screen key · Esc")
+   sits 10 % above the display centre so it does not cover the content people usually capture.
+4. The user selects, annotates, and exports. The overlay closes on copy, save, or cancel.
+5. The app keeps running in the menu bar / tray.
 
 ## State machine
 
@@ -20,16 +22,11 @@ Idle ──drag──▶ Selecting ──release──▶ Selected ──pick to
 Selected/ToolActive: handles resize · body drag moves · arrows nudge · undo/redo · copy · save
 ```
 
-## Esc cascade
+## Esc
 
-One level per press, so the overlay never closes mid-action:
-
-1. Drawing a shape → cancel that shape, stay on the tool.
-2. Text box open → discard the text.
-3. Colour strip open → close it.
-4. A tool is active → deselect the tool.
-5. A selection exists → clear the selection and its annotations.
-6. Nothing selected → close the overlay.
+Esc cancels whatever is mid-edit, one level per press: a shape being drawn, an open text box, an
+emoji pick, the colour strip. When nothing is mid-edit — including when a selection exists — Esc
+closes the overlay immediately (the user has decided not to take the shot).
 
 ## Selection
 
@@ -39,10 +36,12 @@ One level per press, so the overlay never closes mid-action:
 - Holding Shift constrains a drag/resize to a square.
 - Arrow keys nudge by 1 px (10 px with Shift). Alt+arrows grow/shrink the right/bottom edges.
 - A live `W × H` label sits by the selection.
+- Cursor: crosshair before a selection exists and inside it while a drawing tool is active; the
+  default arrow outside the selection and over the toolbars; resize/move cursors on handles/body.
 
 ## Tools
 
-Pen (freehand), Line, Arrow (filled head), Rectangle, Marker (highlighter), Text (inline), Redact.
+Pen (freehand), Line, Arrow (filled head), Rectangle, Marker (highlighter), Text (inline), Emoji, Redact.
 
 - The mouse wheel changes the active tool's width (font size for Text, block size for Redact). Each
   tool remembers its own width; widths persist across sessions.
@@ -50,7 +49,12 @@ Pen (freehand), Line, Arrow (filled head), Rectangle, Marker (highlighter), Text
 - Marker strokes are composited as one layer at 35% with a multiply blend, so overlapping strokes
   never double-darken and text underneath stays legible.
 - Text commits on click-away or Ctrl/Cmd+Return; an empty text box is discarded.
-- Redact shows a live pixelated/blurred preview while dragging. Its block grid is anchored to the
+- Emoji: a strip of common emojis plus "more" (system picker on macOS; typed/pasted or Win+. on
+  Windows). Clicking inside the selection stamps the current emoji; dragging an existing one moves
+  it; the wheel resizes the last one (and future stamps); `[` / `]` or Option/Alt+wheel rotate it
+  in 15° steps.
+- Redact has three modes — mosaic (default), blur, blackout — chosen by right-clicking the redact
+  tool; the choice persists. Redact shows a live preview while dragging. Its block grid is anchored to the
   image origin, so moving or resizing a region never makes blocks shimmer. Holding Shift switches a
   region to blur instead of pixelate. Redaction destroys pixels in the exported image.
 
@@ -63,9 +67,9 @@ last colour is remembered.
 
 - **Copy**: compose the cropped, annotated image at native pixel scale, put PNG + bitmap on the
   clipboard, verify the write, then close and show a confirmation toast.
-- **Save**: same composition; show a save dialog with a timestamped name (`DisplayShot YYYY-MM-DD at
-  HH.MM.SS.png`) and a remembered folder, or write silently to the configured folder when "save
-  without asking" is on.
+- **Save**: same composition; show a save dialog with a format chooser (JPEG default, PNG, TIFF),
+  a timestamped name (`DisplayShot YYYY-MM-DD at HH.MM.SS.jpg`) and a remembered folder; the chosen
+  format is remembered. "Save without asking" writes silently in the preferred format.
 - A short sound plays on success (toggleable).
 
 ## What DisplayShot never does

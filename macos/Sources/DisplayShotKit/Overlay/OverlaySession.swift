@@ -11,6 +11,7 @@ final class OverlaySession: NSObject {
         case resizing(Handle)
         case moving(grabOffset: CGPoint)
         case drawing
+        case movingEmoji(id: UUID, grabOffset: CGPoint)
     }
 
     struct ScreenContext {
@@ -35,6 +36,10 @@ final class OverlaySession: NSObject {
     private(set) var inProgress: Annotation?
     private(set) var colorStripVisible = false
     private(set) var isTextEditing = false
+    private(set) var isEmojiPicking = false
+    private(set) var redactMode: RedactMode
+    private(set) var currentEmoji: String
+    private var lastEmojiID: UUID?
     private(set) var isFinished = false
     var onFinished: (() -> Void)?
 
@@ -49,6 +54,8 @@ final class OverlaySession: NSObject {
         self.captures = captures
         self.prefs = prefs
         widths = prefs.toolWidths
+        redactMode = prefs.redactMode
+        currentEmoji = prefs.lastEmoji
         let idx = prefs.lastColorIndex
         if idx >= 0 && idx < Palette.colors.count {
             colorIndex = idx
@@ -82,6 +89,7 @@ final class OverlaySession: NSObject {
         isFinished = true
         for s in screens {
             s.view.removeTextEditor()
+            s.view.removeEmojiReceiver()
             s.window.orderOut(nil)
             s.window.close()
         }
@@ -133,6 +141,7 @@ final class OverlaySession: NSObject {
             commitText()
             return
         }
+        if isEmojiPicking { cancelEmojiPick() }
         colorStripVisible = false
         if let sel = selection, activeIndex == index {
             switch sel.hitTest(p) {
@@ -142,6 +151,13 @@ final class OverlaySession: NSObject {
                 if let tool = activeTool {
                     if tool == .text {
                         beginText(at: p)
+                    } else if tool == .emoji {
+                        if let hit = emojiHit(at: p), case .emoji(let e) = hit.kind {
+                            lastEmojiID = hit.id
+                            phase = .movingEmoji(id: hit.id, grabOffset: p - e.center)
+                        } else {
+                            stampEmoji(at: p)
+                        }
                     } else {
                         startDrawing(tool, at: p.clamped(to: sel.rect))
                     }
@@ -192,6 +208,12 @@ final class OverlaySession: NSObject {
         case .drawing:
             guard let ip = inProgress, let sel = selection else { return }
             inProgress = DrawingTools.update(ip, origin: drawOrigin, to: p.clamped(to: sel.rect), constrain: shiftDown)
+        case .movingEmoji(let id, let grab):
+            guard let sel = selection, let a = store.item(id: id), case .emoji(var e) = a.kind else { return }
+            e.center = (p - grab).clamped(to: sel.rect)
+            var copy = a
+            copy.kind = .emoji(e)
+            store.replace(id: id, with: copy)
         default:
             break
         }
@@ -206,7 +228,7 @@ final class OverlaySession: NSObject {
                 selection = nil
                 phase = .idle
             }
-        case .resizing, .moving:
+        case .resizing, .moving, .movingEmoji:
             phase = .selected
         case .drawing:
             if let ip = inProgress, ip.isMeaningful { store.add(ip) }
@@ -236,10 +258,10 @@ final class OverlaySession: NSObject {
     }
 
     func cursor(at p: CGPoint, index: Int) -> NSCursor {
-        if isTextEditing { return .arrow }
+        if isTextEditing || isEmojiPicking { return .arrow }
         guard let sel = selection, activeIndex == index else { return .crosshair }
         switch phase {
-        case .moving: return .closedHand
+        case .moving, .movingEmoji: return .closedHand
         case .resizing(let h): return cursor(for: h)
         case .drawing: return activeTool == .text ? .iBeam : .crosshair
         default: break
@@ -248,8 +270,10 @@ final class OverlaySession: NSObject {
         case .handle(let h): return cursor(for: h)
         case .inside:
             guard let tool = activeTool else { return .openHand }
-            return tool == .text ? .iBeam : .crosshair
-        case .outside: return .crosshair
+            if tool == .text { return .iBeam }
+            if tool == .emoji { return emojiHit(at: p) != nil ? .openHand : .crosshair }
+            return .crosshair
+        case .outside: return .arrow
         }
     }
 
@@ -264,14 +288,74 @@ final class OverlaySession: NSObject {
     // MARK: - Drawing tools
 
     private func startDrawing(_ tool: ToolKind, at p: CGPoint) {
-        guard let a = DrawingTools.begin(tool, at: p, color: color.cgColor, width: width(for: tool), blur: shiftDown) else { return }
+        guard var a = DrawingTools.begin(tool, at: p, color: color.cgColor, width: width(for: tool), blur: shiftDown) else { return }
+        if case .redact(let r, _, let b) = a.kind { a.kind = .redact(r, shiftDown ? .blur : redactMode, b) }
         drawOrigin = p
         inProgress = a
         phase = .drawing
     }
 
+    func setRedactMode(_ mode: RedactMode) {
+        redactMode = mode
+        prefs.redactMode = mode
+        if activeTool != .redact { activeTool = .redact }
+        refresh()
+    }
+
+    // MARK: - Emoji tool
+
+    func setEmoji(_ emoji: String) {
+        currentEmoji = emoji
+        prefs.lastEmoji = emoji
+        refresh()
+    }
+
+    private func stampEmoji(at p: CGPoint) {
+        let a = Annotation(.emoji(EmojiAnnotation(center: p, string: currentEmoji, size: width(for: .emoji), rotation: 0)))
+        store.add(a)
+        lastEmojiID = a.id
+    }
+
+    private func emojiHit(at p: CGPoint) -> Annotation? {
+        for a in store.items.reversed() {
+            if case .emoji(let e) = a.kind, e.bounds.contains(p) { return a }
+        }
+        return nil
+    }
+
+    /// Applies a change to the most recently stamped/moved emoji.
+    private func updateLastEmoji(_ change: (inout EmojiAnnotation) -> Void) {
+        guard let id = lastEmojiID, let a = store.item(id: id), case .emoji(var e) = a.kind else { return }
+        change(&e)
+        var copy = a
+        copy.kind = .emoji(e)
+        store.replace(id: id, with: copy)
+    }
+
+    func rotateLastEmoji(by degrees: CGFloat) {
+        updateLastEmoji { $0.rotation += degrees }
+        refresh()
+    }
+
+    func beginEmojiPick() {
+        guard let v = activeView else { return }
+        isEmojiPicking = true
+        v.showEmojiReceiver()
+        NSApp.orderFrontCharacterPalette(nil)
+    }
+
+    func finishEmojiPick(_ emoji: String?) {
+        guard isEmojiPicking else { return }
+        isEmojiPicking = false
+        activeView?.removeEmojiReceiver()
+        if let emoji, !emoji.isEmpty { setEmoji(emoji) } else { refresh() }
+    }
+
+    func cancelEmojiPick() { finishEmojiPick(nil) }
+
     func selectTool(_ tool: ToolKind?) {
         if isTextEditing { commitText() }
+        if isEmojiPicking { cancelEmojiPick() }
         if case .drawing = phase {
             inProgress = nil
             phase = .selected
@@ -360,7 +444,7 @@ final class OverlaySession: NSObject {
 
     /// Returns true when the event was consumed.
     func handleKey(_ event: NSEvent) -> Bool {
-        if isTextEditing { return false }
+        if isTextEditing || isEmojiPicking { return false }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let cmd = flags.contains(.command), shift = flags.contains(.shift), opt = flags.contains(.option)
         let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
@@ -405,6 +489,10 @@ final class OverlaySession: NSObject {
             return true
         }
         if chars == "v" { selectTool(nil); return true }
+        if activeTool == .emoji, chars == "[" || chars == "]" {
+            rotateLastEmoji(by: chars == "[" ? -15 : 15)
+            return true
+        }
         if let d = Int(chars), (1...9).contains(d), d <= Palette.colors.count {
             setColor(index: d - 1)
             return true
@@ -412,9 +500,11 @@ final class OverlaySession: NSObject {
         return false
     }
 
-    /// One level per press: shape → text → colour strip → tool → selection → overlay.
+    /// One level per press while something is mid-edit (shape, text, emoji pick, colour strip);
+    /// otherwise Esc closes the overlay immediately.
     func escape() {
         if isTextEditing { cancelText(); return }
+        if isEmojiPicking { cancelEmojiPick(); return }
         if case .drawing = phase {
             inProgress = nil
             phase = .selected
@@ -422,15 +512,6 @@ final class OverlaySession: NSObject {
             return
         }
         if colorStripVisible { colorStripVisible = false; refresh(); return }
-        if activeTool != nil { activeTool = nil; refresh(); return }
-        if selection != nil {
-            selection = nil
-            store.clear()
-            redactor.clearCache()
-            phase = .idle
-            refresh()
-            return
-        }
         dismiss()
     }
 
@@ -464,13 +545,19 @@ final class OverlaySession: NSObject {
             steps = event.scrollingDeltaY > 0 ? 1 : (event.scrollingDeltaY < 0 ? -1 : 0)
         }
         guard steps != 0 else { return }
+        if tool == .emoji, event.modifierFlags.contains(.option) {
+            rotateLastEmoji(by: CGFloat(steps) * 15)
+            activeView?.showWidthBadge("rotate", near: lastPoint)
+            return
+        }
         let range = tool.widthRange
         let w = clamp(width(for: tool) + CGFloat(steps), range.lowerBound, range.upperBound)
         widths[tool] = w
         prefs.toolWidths = widths
         if let ip = inProgress { inProgress = ip.withWidth(w) }
+        if tool == .emoji { updateLastEmoji { $0.size = w } }
         if isTextEditing, tool == .text { activeView?.updateTextEditorStyle(color: color, fontSize: w) }
-        let unit = tool == .text ? "pt" : (tool == .redact ? "block" : "px")
+        let unit = (tool == .text || tool == .emoji) ? "pt" : (tool == .redact ? "block" : "px")
         activeView?.showWidthBadge("\(Int(w)) \(unit)", near: lastPoint)
         refresh()
     }
@@ -508,7 +595,7 @@ final class OverlaySession: NSObject {
         let screen = screens[i].capture.screen
         if prefs.saveWithoutAsking {
             do {
-                let url = try FileExporter.saveSilently(image, to: prefs.saveDirectory)
+                let url = try FileExporter.saveSilently(image, to: prefs.saveDirectory, format: prefs.saveFormat)
                 finish(with: "Saved to \(displayPath(url))", on: screen)
             } catch {
                 screens[i].view.flashError("Couldn't save: \(error.localizedDescription)")
@@ -517,8 +604,9 @@ final class OverlaySession: NSObject {
         }
         for s in screens { s.window.orderOut(nil) }
         do {
-            if let url = try FileExporter.saveWithPanel(image, initialDirectory: prefs.saveDirectory) {
+            if let (url, format) = try FileExporter.saveWithPanel(image, initialDirectory: prefs.saveDirectory, format: prefs.saveFormat) {
                 prefs.saveDirectory = url.deletingLastPathComponent()
+                prefs.saveFormat = format
                 finish(with: "Saved to \(displayPath(url))", on: screen)
             } else {
                 restoreWindows()

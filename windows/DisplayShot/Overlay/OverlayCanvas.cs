@@ -15,6 +15,7 @@ public sealed class OverlayCanvas : FrameworkElement
     private readonly OverlaySession _session;
     private static readonly Brush DimBrush = Frozen(Color.FromArgb(115, 0, 0, 0));
     private static readonly Brush ChromeBrush = Frozen(Color.FromArgb(240, 26, 26, 26));
+    private static readonly Brush HintBrush = Frozen(Color.FromArgb(140, 26, 26, 26));
     private static readonly Pen WhitePen = FrozenPen(Colors.White, 1);
     private static readonly Pen DarkPen = FrozenPen(Color.FromArgb(128, 0, 0, 0), 1);
     private static readonly Pen HandleStroke = FrozenPen(Color.FromArgb(153, 0, 0, 0), 1);
@@ -116,8 +117,9 @@ public sealed class OverlayCanvas : FrameworkElement
         var center = _session.Capture.CanvasRect(primary);
         var text = $"Drag to select an area   ·   Ctrl+A full screen   ·   Esc to cancel";
         var ft = new FormattedText(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, HintTypeface, 13 * primary.DpiScale, Brushes.White, primary.DpiScale);
-        var rect = new Rect(center.X + (center.Width - ft.Width) / 2 - 14, center.Y + (center.Height - ft.Height) / 2 - 8, ft.Width + 28, ft.Height + 16);
-        dc.DrawRoundedRectangle(ChromeBrush, null, rect, 8, 8);
+        // 10 % above centre so the box does not cover what people usually capture; translucent so the screen shows through.
+        var rect = new Rect(center.X + (center.Width - ft.Width) / 2 - 14, center.Y + center.Height * 0.40 - ft.Height / 2 - 8, ft.Width + 28, ft.Height + 16);
+        dc.DrawRoundedRectangle(HintBrush, null, rect, 8, 8);
         dc.DrawText(ft, new Point(rect.X + 14, rect.Y + 8));
     }
 

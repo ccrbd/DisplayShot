@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 enum ToolKind: String, CaseIterable, Codable {
-    case pen, line, arrow, rectangle, marker, text, redact
+    case pen, line, arrow, rectangle, marker, text, emoji, redact
 
     var defaultWidth: CGFloat {
         switch self {
@@ -12,6 +12,7 @@ enum ToolKind: String, CaseIterable, Codable {
         case .rectangle: return 3
         case .marker: return 14
         case .text: return 18
+        case .emoji: return 48
         case .redact: return 8
         }
     }
@@ -19,6 +20,7 @@ enum ToolKind: String, CaseIterable, Codable {
     var widthRange: ClosedRange<CGFloat> {
         switch self {
         case .text: return 8...96
+        case .emoji: return 16...256
         case .redact: return 2...64
         default: return 1...32
         }
@@ -32,6 +34,7 @@ enum ToolKind: String, CaseIterable, Codable {
         case .rectangle: return "Rectangle"
         case .marker: return "Marker"
         case .text: return "Text"
+        case .emoji: return "Emoji"
         case .redact: return "Redact"
         }
     }
@@ -44,6 +47,7 @@ enum ToolKind: String, CaseIterable, Codable {
         case .rectangle: return "rectangle"
         case .marker: return "highlighter"
         case .text: return "textformat"
+        case .emoji: return "face.smiling"
         case .redact: return "eye.slash"
         }
     }
@@ -57,13 +61,22 @@ enum ToolKind: String, CaseIterable, Codable {
         case .rectangle: return "r"
         case .marker: return "m"
         case .text: return "t"
+        case .emoji: return "e"
         case .redact: return "x"
         }
     }
 }
 
-enum RedactMode: String, Codable {
-    case pixelate, blur
+enum RedactMode: String, Codable, CaseIterable {
+    case pixelate, blur, blackout
+
+    var title: String {
+        switch self {
+        case .pixelate: return "Mosaic (pixelate)"
+        case .blur: return "Blur"
+        case .blackout: return "Blackout"
+        }
+    }
 }
 
 struct Stroke {
@@ -78,6 +91,19 @@ struct TextAnnotation {
     var fontSize: CGFloat
 }
 
+/// A single emoji stamped on the canvas; `size` is the font size, `rotation` in degrees.
+struct EmojiAnnotation {
+    var center: CGPoint
+    var string: String
+    var size: CGFloat
+    var rotation: CGFloat
+
+    /// Unrotated bounding box used for hit-testing.
+    var bounds: CGRect {
+        CGRect(x: center.x - size * 0.6, y: center.y - size * 0.6, width: size * 1.2, height: size * 1.2)
+    }
+}
+
 /// One annotation in screen (view) coordinates: points, top-left origin.
 struct Annotation: Identifiable {
     enum Kind {
@@ -87,6 +113,7 @@ struct Annotation: Identifiable {
         case rectangle(CGRect, Stroke)
         case marker([CGPoint], Stroke)
         case text(TextAnnotation)
+        case emoji(EmojiAnnotation)
         /// rect, mode, block size in points
         case redact(CGRect, RedactMode, CGFloat)
     }
@@ -116,6 +143,7 @@ struct Annotation: Identifiable {
         case .line(let a, let b, _), .arrow(let a, let b, _): return a.distance(to: b) >= 2
         case .rectangle(let r, _), .redact(let r, _, _): return r.width >= 2 && r.height >= 2
         case .text(let t): return !t.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .emoji(let e): return !e.string.isEmpty && e.size > 0
         }
     }
 
@@ -129,6 +157,7 @@ struct Annotation: Identifiable {
         case .arrow(let a, let b, var s): s.width = w; copy.kind = .arrow(a, b, s)
         case .rectangle(let r, var s): s.width = w; copy.kind = .rectangle(r, s)
         case .text(var t): t.fontSize = w; copy.kind = .text(t)
+        case .emoji(var e): e.size = w; copy.kind = .emoji(e)
         case .redact(let r, let m, _): copy.kind = .redact(r, m, w)
         }
         return copy

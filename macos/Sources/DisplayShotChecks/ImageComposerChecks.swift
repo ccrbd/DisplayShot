@@ -143,6 +143,42 @@ enum ImageComposerChecks {
                 try expectEqual(Int(one.data[idx + 2]), Int(two.data[idx + 2]), "blue channel should be identical with one or two overlapping strokes")
                 try expectLess(Int(one.data[idx + 2]), 255, "marker should tint the white background")
             }
+            Checks.run("blackout redaction paints solid black") {
+                let src = makeSource(width: 200, height: 100)
+                let sel = CGRect(x: 0, y: 0, width: 100, height: 50)
+                let out = Pixels(try compose(src, sel, [Annotation(.redact(CGRect(x: 10, y: 10, width: 30, height: 20), .blackout, 8))]))
+                for y in 20..<60 {
+                    for x in 20..<80 {
+                        let i = y * out.bytesPerRow + x * 4
+                        try expectEqual(Int(out.data[i]), 0, "R at (\(x),\(y))")
+                        try expectEqual(Int(out.data[i + 1]), 0, "G at (\(x),\(y))")
+                        try expectEqual(Int(out.data[i + 2]), 0, "B at (\(x),\(y))")
+                    }
+                }
+                let outside = 5 * out.bytesPerRow + 5 * 4
+                try expect(out.data[outside] == 0 || out.data[outside] == 255, "outside should be untouched checkerboard")
+            }
+            Checks.run("emoji is drawn, and rotation changes the result") {
+                let cs = CGColorSpace(name: CGColorSpace.sRGB)!
+                let ctx = CGContext(data: nil, width: 200, height: 200, bitsPerComponent: 8, bytesPerRow: 0, space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+                ctx.setFillColor(CGColor(gray: 1, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: 200, height: 200))
+                let white = ctx.makeImage()!
+                let sel = CGRect(x: 0, y: 0, width: 100, height: 100)
+                let plain = Pixels(try compose(white, sel, []))
+                let up = Pixels(try compose(white, sel, [Annotation(.emoji(EmojiAnnotation(center: CGPoint(x: 50, y: 50), string: "👉", size: 40, rotation: 0)))]))
+                let turned = Pixels(try compose(white, sel, [Annotation(.emoji(EmojiAnnotation(center: CGPoint(x: 50, y: 50), string: "👉", size: 40, rotation: 90)))]))
+                try expectNotEqual(plain.data, up.data, "emoji should draw")
+                try expectNotEqual(up.data, turned.data, "rotation should change pixels")
+                try expect(EmojiAnnotation(center: CGPoint(x: 50, y: 50), string: "👉", size: 40, rotation: 0).bounds.contains(CGPoint(x: 60, y: 60)))
+            }
+            Checks.run("JPEG and TIFF encoding") {
+                let img = makeSource(width: 16, height: 16)
+                let jpeg = ImageComposer.data(img, format: .jpeg)
+                try expect(jpeg != nil)
+                try expectEqual(Array(jpeg!.prefix(2)), [0xFF, 0xD8])
+                try expect(ImageComposer.data(img, format: .tiff) != nil)
+                try expectEqual(FileExporter.defaultFilename(date: Date(timeIntervalSince1970: 0), format: .jpeg).hasSuffix(".jpg"), true)
+            }
             Checks.run("PNG encoding") {
                 let data = ImageComposer.pngData(makeSource(width: 16, height: 16))
                 try expect(data != nil)

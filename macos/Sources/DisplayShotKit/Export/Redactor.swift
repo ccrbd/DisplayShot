@@ -24,6 +24,19 @@ final class Redactor {
         let key = "\(mode.rawValue)|\(block)|\(Int(r.minX)),\(Int(r.minY)),\(Int(r.width)),\(Int(r.height))"
         if let cached = cache[key] { return cached }
 
+        if mode == .blackout {
+            guard let cs = CGColorSpace(name: CGColorSpace.sRGB),
+                  let ctx = CGContext(data: nil, width: Int(r.width), height: Int(r.height), bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            else { return nil }
+            ctx.setFillColor(CGColor(gray: 0, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: r.width, height: r.height))
+            guard let img = ctx.makeImage() else { return nil }
+            let patch = RedactPatch(image: img, pixelRect: r)
+            cache[key] = patch
+            return patch
+        }
+
         let input = CIImage(cgImage: source).clampedToExtent()
         let output: CIImage
         switch mode {
@@ -40,6 +53,8 @@ final class Redactor {
             f.radius = Float(block * 1.5)
             guard let out = f.outputImage else { return nil }
             output = out
+        case .blackout:
+            return nil
         }
         // Core Image uses a bottom-left origin.
         let ciRect = CGRect(x: r.minX, y: CGFloat(source.height) - r.maxY, width: r.width, height: r.height)

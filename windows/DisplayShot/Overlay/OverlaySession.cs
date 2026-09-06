@@ -16,7 +16,7 @@ namespace DisplayShot.Overlay;
 /// annotation list and every interaction rule (mouse, keyboard, wheel, Esc cascade, export).</summary>
 public sealed class OverlaySession
 {
-    private enum Phase { Idle, Selecting, Selected, Resizing, Moving, Drawing }
+    private enum Phase { Idle, Selecting, Selected, Resizing, Moving, Drawing, MovingEmoji }
 
     public VirtualScreenCapture Capture { get; }
     public AnnotationStore Store { get; } = new();
@@ -43,6 +43,13 @@ public sealed class OverlaySession
     private Point _lastPoint;
     private Handle _activeHandle;
     private bool _finished;
+    private RedactMode _redactMode;
+    private string _currentEmoji;
+    private Guid? _lastEmojiId;
+    private Guid _movingEmojiId;
+    private Border? _emojiStrip;
+    private TextBox? _emojiReceiver;
+    private bool IsEmojiPicking => _emojiReceiver is not null;
 
     // Chrome
     private Border? _palette;
@@ -63,6 +70,8 @@ public sealed class OverlaySession
         foreach (var tool in ToolKindExtensions.All) _widths[tool] = settings.WidthFor(tool);
         _colorIndex = settings.LastColorIndex >= 0 && settings.LastColorIndex < OverlayChrome.Palette.Length ? settings.LastColorIndex : 0;
         _color = OverlayChrome.Palette[_colorIndex ?? 0];
+        _redactMode = settings.RedactMode;
+        _currentEmoji = string.IsNullOrEmpty(settings.LastEmoji) ? "👍" : settings.LastEmoji;
     }
 
     public bool ShowsChrome => Selection is not null && _phase is Phase.Selected or Phase.Drawing;
@@ -101,6 +110,7 @@ public sealed class OverlaySession
         if (_finished) return;
         _finished = true;
         RemoveTextBox();
+        RemoveEmojiReceiver();
         _window?.Close();
         _window = null;
         Finished?.Invoke(this, EventArgs.Empty);
@@ -125,6 +135,7 @@ public sealed class OverlaySession
         var p = CanvasPoint(e);
         _lastPoint = p;
         if (IsTextEditing) { CommitText(); return; }
+        if (IsEmojiPicking) RemoveEmojiReceiver();
         _colorStripVisible = false;
 
         if (Selection is { } sel)
@@ -139,6 +150,17 @@ public sealed class OverlaySession
                     if (_tool is { } tool)
                     {
                         if (tool == ToolKind.Text) BeginText(p);
+                        else if (tool == ToolKind.Emoji)
+                        {
+                            if (EmojiHit(p) is { } hit)
+                            {
+                                _lastEmojiId = hit.Id;
+                                _movingEmojiId = hit.Id;
+                                _grabOffset = new Point(p.X - hit.Center.X, p.Y - hit.Center.Y);
+                                _phase = Phase.MovingEmoji;
+                            }
+                            else StampEmoji(p);
+                        }
                         else StartDrawing(tool, ClampToSelection(p));
                     }
                     else
@@ -176,7 +198,7 @@ public sealed class OverlaySession
         _lastPoint = p;
         ApplyDrag(p, e.KeyboardShiftDown());
         UpdateCursor(p);
-        if (_phase is Phase.Selecting or Phase.Resizing or Phase.Moving or Phase.Drawing) Invalidate();
+        if (_phase is Phase.Selecting or Phase.Resizing or Phase.Moving or Phase.Drawing or Phase.MovingEmoji) Invalidate();
     }
 
     private void ApplyDrag(Point p, bool shift)
@@ -195,6 +217,9 @@ public sealed class OverlaySession
             case Phase.Drawing when InProgress is { } ip && Selection is { } s:
                 InProgress = DrawingTools.Update(ip, _dragOrigin, ClampToSelection(p), shift);
                 break;
+            case Phase.MovingEmoji when Store.Item(_movingEmojiId) is EmojiAnnotation e:
+                Store.Replace(e.Id, e with { Center = ClampToSelection(new Point(p.X - _grabOffset.X, p.Y - _grabOffset.Y)) });
+                break;
         }
     }
 
@@ -210,6 +235,7 @@ public sealed class OverlaySession
                 break;
             case Phase.Resizing:
             case Phase.Moving:
+            case Phase.MovingEmoji:
                 _phase = Phase.Selected;
                 break;
             case Phase.Drawing:
@@ -226,14 +252,21 @@ public sealed class OverlaySession
         if (_tool is not { } tool || Selection is null) return;
         var steps = e.Delta / 120;
         if (steps == 0) steps = e.Delta > 0 ? 1 : -1;
+        if (tool == ToolKind.Emoji && Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
+        {
+            RotateLastEmoji(steps * 15);
+            ShowWidthBadge("rotate");
+            return;
+        }
         var (min, max) = tool.WidthRange();
         var w = SelectionModel.Clamp(WidthFor(tool) + steps, min, max);
         _widths[tool] = w;
         _settings.SetWidth(tool, w);
         _settings.Save();
         if (InProgress is { } ip) InProgress = ip.WithWidth(w);
+        if (tool == ToolKind.Emoji) UpdateLastEmoji(em => em with { Size = w });
         if (IsTextEditing && tool == ToolKind.Text) ApplyTextStyle();
-        var unit = tool == ToolKind.Text ? "pt" : tool == ToolKind.Redact ? "block" : "px";
+        var unit = tool is ToolKind.Text or ToolKind.Emoji ? "pt" : tool == ToolKind.Redact ? "block" : "px";
         ShowWidthBadge($"{(int)w} {unit}");
         Invalidate();
     }
@@ -251,14 +284,105 @@ public sealed class OverlaySession
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         var a = DrawingTools.Begin(tool, p, _color, WidthFor(tool), shift);
         if (a is null) return;
+        if (a is RedactAnnotation ra) a = ra with { Mode = shift ? RedactMode.Blur : _redactMode };
         _dragOrigin = p;
         InProgress = a;
         _phase = Phase.Drawing;
     }
 
+    private void SetRedactMode(RedactMode mode)
+    {
+        _redactMode = mode;
+        _settings.RedactMode = mode;
+        _settings.Save();
+        if (_tool != ToolKind.Redact) _tool = ToolKind.Redact;
+        Invalidate();
+    }
+
+    // MARK: Emoji tool
+
+    private void SetEmoji(string emoji)
+    {
+        _currentEmoji = emoji;
+        _settings.LastEmoji = emoji;
+        _settings.Save();
+        Invalidate();
+    }
+
+    private void StampEmoji(Point p)
+    {
+        var a = new EmojiAnnotation(p, _currentEmoji, WidthFor(ToolKind.Emoji), 0, _color);
+        Store.Add(a);
+        _lastEmojiId = a.Id;
+    }
+
+    private EmojiAnnotation? EmojiHit(Point p)
+    {
+        for (var i = Store.Items.Count - 1; i >= 0; i--)
+            if (Store.Items[i] is EmojiAnnotation e && e.Bounds.Contains(p)) return e;
+        return null;
+    }
+
+    private void UpdateLastEmoji(Func<EmojiAnnotation, EmojiAnnotation> change)
+    {
+        if (_lastEmojiId is { } id && Store.Item(id) is EmojiAnnotation e) Store.Replace(id, change(e));
+    }
+
+    private void RotateLastEmoji(double degrees)
+    {
+        UpdateLastEmoji(e => e with { Rotation = e.Rotation + degrees });
+        Invalidate();
+    }
+
+    /// <summary>"More…": an inline box that receives one emoji (press Win+. to open Windows' picker).</summary>
+    private void BeginEmojiPick()
+    {
+        RemoveEmojiReceiver();
+        if (_host is null) return;
+        _emojiReceiver = new TextBox
+        {
+            Width = 120,
+            FontFamily = new FontFamily("Segoe UI Emoji"),
+            FontSize = 16,
+            Background = new SolidColorBrush(Color.FromArgb(240, 26, 26, 26)),
+            Foreground = Brushes.White,
+            CaretBrush = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromArgb(166, 255, 255, 255)),
+            Padding = new Thickness(4),
+            ToolTip = "Type or paste an emoji (Win+. opens the emoji panel). Esc cancels.",
+        };
+        var anchor = _emojiStrip is { Visibility: Visibility.Visible } strip
+            ? new Point(Canvas.GetLeft(strip), Canvas.GetTop(strip) + strip.ActualHeight + 6)
+            : _lastPoint;
+        Canvas.SetLeft(_emojiReceiver, anchor.X);
+        Canvas.SetTop(_emojiReceiver, anchor.Y);
+        _emojiReceiver.TextChanged += (_, _) =>
+        {
+            var text = _emojiReceiver?.Text ?? string.Empty;
+            if (text.Length == 0) return;
+            var first = System.Globalization.StringInfo.GetNextTextElement(text);
+            RemoveEmojiReceiver();
+            SetEmoji(first);
+        };
+        _emojiReceiver.PreviewKeyDown += (_, args) =>
+        {
+            if (args.Key == Key.Escape) { args.Handled = true; RemoveEmojiReceiver(); Invalidate(); }
+        };
+        _host.Children.Add(_emojiReceiver);
+        _emojiReceiver.Focus();
+    }
+
+    private void RemoveEmojiReceiver()
+    {
+        if (_emojiReceiver is null) return;
+        _host?.Children.Remove(_emojiReceiver);
+        _emojiReceiver = null;
+    }
+
     private void SelectTool(ToolKind? tool)
     {
         if (IsTextEditing) CommitText();
+        if (IsEmojiPicking) RemoveEmojiReceiver();
         if (_phase == Phase.Drawing) { InProgress = null; _phase = Phase.Selected; }
         _tool = _tool == tool ? null : tool;
         Invalidate();
@@ -352,8 +476,7 @@ public sealed class OverlaySession
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        // Esc and the command shortcuts must win even while the text box has focus is handled there.
-        if (IsTextEditing) return;
+        if (IsTextEditing || IsEmojiPicking) return; // those boxes handle their own keys
         if (e.Key == Key.Escape) { e.Handled = true; Escape(); return; }
         var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
         if (ctrl)
@@ -370,7 +493,7 @@ public sealed class OverlaySession
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (IsTextEditing) return;
+        if (IsTextEditing || IsEmojiPicking) return;
         var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         var alt = Keyboard.Modifiers.HasFlag(ModifierKeys.Alt);
@@ -402,6 +525,12 @@ public sealed class OverlaySession
         var tool = ToolKindExtensions.All.FirstOrDefault(t => t.Key() == ch, (ToolKind)(-1));
         if ((int)tool != -1) { e.Handled = true; SelectTool(tool); return; }
         if (ch == 'V') { e.Handled = true; SelectTool(null); return; }
+        if (_tool == ToolKind.Emoji && e.Key is Key.OemOpenBrackets or Key.OemCloseBrackets)
+        {
+            e.Handled = true;
+            RotateLastEmoji(e.Key == Key.OemOpenBrackets ? -15 : 15);
+            return;
+        }
         if (ch is >= '1' and <= '9')
         {
             var idx = ch - '1';
@@ -417,22 +546,13 @@ public sealed class OverlaySession
         _ => '\0',
     };
 
-    /// <summary>One level per press: shape → text → colour strip → tool → selection → overlay.</summary>
+    /// <summary>Esc cancels whatever is mid-edit (shape, text, emoji pick, colour strip); otherwise it closes the overlay.</summary>
     private void Escape()
     {
         if (IsTextEditing) { CancelText(); return; }
+        if (IsEmojiPicking) { RemoveEmojiReceiver(); Invalidate(); return; }
         if (_phase == Phase.Drawing) { InProgress = null; _phase = Phase.Selected; Invalidate(); return; }
         if (_colorStripVisible) { _colorStripVisible = false; Invalidate(); return; }
-        if (_tool is not null) { _tool = null; Invalidate(); return; }
-        if (Selection is not null)
-        {
-            Selection = null;
-            Store.Clear();
-            Redactor.ClearCache();
-            _phase = Phase.Idle;
-            Invalidate();
-            return;
-        }
         Dismiss();
     }
 
@@ -483,7 +603,7 @@ public sealed class OverlaySession
         {
             try
             {
-                var path = FileExporter.SaveSilently(image, _settings.SaveDirectory);
+                var path = FileExporter.SaveSilently(image, _settings.SaveDirectory, _settings.SaveFormat);
                 Finish($"Saved to {System.IO.Path.GetFileName(path)}");
             }
             catch (Exception ex) { ShowError(ex.Message); }
@@ -492,8 +612,10 @@ public sealed class OverlaySession
         _window!.Hide();
         try
         {
-            var path = FileExporter.SaveWithDialog(image, _settings.SaveDirectory, null);
-            if (path is null) { _window.Show(); _window.Activate(); return; }
+            var result = FileExporter.SaveWithDialog(image, _settings.SaveDirectory, _settings.SaveFormat, null);
+            if (result is null) { _window.Show(); _window.Activate(); return; }
+            var (path, format) = result.Value;
+            _settings.SaveFormat = format;
             _settings.SaveDirectory = System.IO.Path.GetDirectoryName(path) ?? _settings.SaveDirectory;
             _settings.Save();
             Finish($"Saved to {System.IO.Path.GetFileName(path)}");
@@ -534,6 +656,7 @@ public sealed class OverlaySession
         _palette!.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         _actionBar!.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         _colorStrip!.Visibility = show && _colorStripVisible ? Visibility.Visible : Visibility.Collapsed;
+        _emojiStrip!.Visibility = show && _tool == ToolKind.Emoji ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
 
         var sel = Selection!.Rect;
@@ -550,8 +673,20 @@ public sealed class OverlaySession
         if (stripX < 0) stripX = layout.Palette.Right + ToolbarLayout.Gap;
         Place(_colorStrip, new Rect(stripX, layout.Palette.Top, stripW, ButtonHeight));
 
+        var emojiW = _emojiStrip.DesiredSizeOr(360);
+        var emojiX = layout.Palette.Left - ToolbarLayout.Gap - emojiW;
+        if (emojiX < 0) emojiX = layout.Palette.Right + ToolbarLayout.Gap;
+        Place(_emojiStrip, new Rect(emojiX, layout.Palette.Top + ButtonHeight, emojiW, ButtonHeight));
+
         foreach (var (tool, highlight) in _toolHighlights)
+        {
             highlight.Background = _tool == tool ? OverlayChrome.Highlight : Brushes.Transparent;
+            if (tool == ToolKind.Redact && highlight.Child is Button rb)
+                rb.ToolTip = $"Redact: {_redactMode.Title()} (X) — right-click to change";
+        }
+        if (_emojiStrip.Child is StackPanel emojiPanel)
+            foreach (var child in emojiPanel.Children.OfType<Button>())
+                child.Background = child.Tag as string == _currentEmoji ? OverlayChrome.Highlight : Brushes.Transparent;
         if (_colorButton is not null) _colorButton.Fill = new SolidColorBrush(_color);
         if (_undoButton is not null) _undoButton.Opacity = Store.CanUndo ? 1 : 0.35;
     }
@@ -572,6 +707,23 @@ public sealed class OverlaySession
             var button = OverlayChrome.ToolButton(tool);
             var highlight = new Border { CornerRadius = new CornerRadius(6), Child = button, Margin = new Thickness(0, 1, 0, 1) };
             button.Click += (_, _) => SelectTool(tool);
+            if (tool == ToolKind.Redact)
+            {
+                var menu = new ContextMenu();
+                foreach (var mode in Enum.GetValues<RedactMode>())
+                {
+                    var item = new MenuItem { Header = mode.Title(), IsCheckable = true, IsChecked = mode == _redactMode };
+                    var chosen = mode;
+                    item.Click += (_, _) => SetRedactMode(chosen);
+                    menu.Items.Add(item);
+                }
+                menu.Opened += (_, _) =>
+                {
+                    var i = 0;
+                    foreach (var mi in menu.Items.OfType<MenuItem>()) mi.IsChecked = Enum.GetValues<RedactMode>()[i++] == _redactMode;
+                };
+                button.ContextMenu = menu;
+            }
             toolStack.Children.Add(highlight);
             _toolHighlights.Add((tool, highlight));
         }
@@ -610,9 +762,27 @@ public sealed class OverlaySession
         }
         _colorStrip = OverlayChrome.Panel(stripStack);
 
+        // Emoji strip: common emojis plus "+" for any other (typed/pasted, or via Win+.).
+        var emojiStack = new StackPanel { Orientation = Orientation.Horizontal };
+        foreach (var emoji in OverlayChrome.EmojiPresets)
+        {
+            var b = OverlayChrome.LabelButton(emoji, $"Stamp {emoji}", 15, 26);
+            if (b.Content is TextBlock tb) tb.FontFamily = new FontFamily("Segoe UI Emoji");
+            b.Tag = emoji;
+            var chosen = emoji;
+            b.Click += (_, _) => SetEmoji(chosen);
+            emojiStack.Children.Add(b);
+        }
+        var more = OverlayChrome.LabelButton("+", "More emoji… (type or paste one; Win+. opens the picker)", 15, 26);
+        more.Click += (_, _) => BeginEmojiPick();
+        emojiStack.Children.Add(more);
+        _emojiStrip = OverlayChrome.Panel(emojiStack);
+
         _host!.Children.Add(_palette);
         _host.Children.Add(_actionBar);
         _host.Children.Add(_colorStrip);
+        _host.Children.Add(_emojiStrip);
+        _emojiStrip.Visibility = Visibility.Collapsed;
         _palette.Visibility = Visibility.Collapsed;
         _actionBar.Visibility = Visibility.Collapsed;
         _colorStrip.Visibility = Visibility.Collapsed;
@@ -650,20 +820,34 @@ public sealed class OverlaySession
     private void UpdateCursor(Point p)
     {
         if (_window is null) return;
-        if (IsTextEditing) { _window.Cursor = Cursors.Arrow; return; }
+        if (IsTextEditing || IsEmojiPicking || IsOverChrome(p)) { _window.Cursor = Cursors.Arrow; return; }
         if (Selection is not { } sel) { _window.Cursor = Cursors.Cross; return; }
         Cursor cursor = _phase switch
         {
-            Phase.Moving => Cursors.SizeAll,
+            Phase.Moving or Phase.MovingEmoji => Cursors.SizeAll,
             Phase.Resizing => HandleCursor(_activeHandle),
             _ => sel.HitTest(p) switch
             {
                 SelectionHit.HandleHit hh => HandleCursor(hh.Handle),
-                SelectionHit.Inside => _tool is null ? Cursors.SizeAll : _tool == ToolKind.Text ? Cursors.IBeam : Cursors.Cross,
-                _ => Cursors.Cross,
+                SelectionHit.Inside => _tool is null ? Cursors.SizeAll
+                    : _tool == ToolKind.Text ? Cursors.IBeam
+                    : _tool == ToolKind.Emoji && EmojiHit(p) is not null ? Cursors.SizeAll
+                    : Cursors.Cross,
+                _ => Cursors.Arrow,
             },
         };
         _window.Cursor = cursor;
+    }
+
+    private bool IsOverChrome(Point p)
+    {
+        foreach (var el in new FrameworkElement?[] { _palette, _actionBar, _colorStrip, _emojiStrip, _textBox, _emojiReceiver })
+        {
+            if (el is null || el.Visibility != Visibility.Visible) continue;
+            var r = new Rect(Canvas.GetLeft(el), Canvas.GetTop(el), el.ActualWidth, el.ActualHeight);
+            if (r.Contains(p)) return true;
+        }
+        return false;
     }
 
     private static Cursor HandleCursor(Handle h) => h switch

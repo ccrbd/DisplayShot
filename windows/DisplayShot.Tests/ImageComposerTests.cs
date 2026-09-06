@@ -90,6 +90,44 @@ public class ImageComposerTests
     });
 
     [Fact]
+    public void Blackout_PaintsSolidBlack() => StaRunner.Run(() =>
+    {
+        var src = Checkerboard(200, 100);
+        var sel = new Rect(0, 0, 100, 50);
+        var done = Pixels(ImageComposer.Compose(src, sel, new Annotation[] { new RedactAnnotation(new Rect(10, 10, 30, 20), RedactMode.Blackout, 8) }, new Redactor())!, out var stride);
+        for (var y = 12; y < 28; y++)
+        for (var x = 12; x < 38; x++)
+        {
+            var i = y * stride + x * 4;
+            Assert.Equal(0, done[i]); Assert.Equal(0, done[i + 1]); Assert.Equal(0, done[i + 2]);
+        }
+    });
+
+    [Fact]
+    public void Emoji_IsDrawnAndRotationChangesPixels() => StaRunner.Run(() =>
+    {
+        var white = BitmapSource.Create(100, 100, 96, 96, PixelFormats.Bgra32, null, Enumerable.Repeat((byte)255, 100 * 100 * 4).ToArray(), 400);
+        white.Freeze();
+        var sel = new Rect(0, 0, 100, 100);
+        var plain = Pixels(ImageComposer.Compose(white, sel, Array.Empty<Annotation>(), new Redactor())!, out _);
+        var up = Pixels(ImageComposer.Compose(white, sel, new Annotation[] { new EmojiAnnotation(new Point(50, 50), "👉", 40, 0, Colors.Red) }, new Redactor())!, out _);
+        var turned = Pixels(ImageComposer.Compose(white, sel, new Annotation[] { new EmojiAnnotation(new Point(50, 50), "👉", 40, 90, Colors.Red) }, new Redactor())!, out _);
+        Assert.NotEqual(plain, up);
+        Assert.NotEqual(up, turned);
+    });
+
+    [Fact]
+    public void JpegAndTiffEncoding() => StaRunner.Run(() =>
+    {
+        var img = Checkerboard(16, 16);
+        var jpeg = ImageComposer.Encode(img, ImageFormat.Jpeg);
+        Assert.Equal(new byte[] { 0xFF, 0xD8 }, jpeg.Take(2).ToArray());
+        Assert.NotEmpty(ImageComposer.Encode(img, ImageFormat.Tiff));
+        Assert.EndsWith(".jpg", FileExporter.DefaultFilename(new DateTime(2026, 9, 6), ImageFormat.Jpeg));
+        Assert.Equal(ImageFormat.Png, ImageFormatExtensions.FromPath(@"C:\x\shot.PNG"));
+    });
+
+    [Fact]
     public void PngEncoding() => StaRunner.Run(() =>
     {
         var png = ImageComposer.EncodePng(Checkerboard(16, 16));

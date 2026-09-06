@@ -52,6 +52,32 @@ public class AnnotationTests
     }
 
     [Fact]
+    public void Emoji_MeaningfulWidthAndBounds()
+    {
+        var e = new EmojiAnnotation(new Point(50, 50), "⭐", 40, 0, Colors.White);
+        Assert.True(e.IsMeaningful);
+        Assert.Equal(64, ((EmojiAnnotation)e.WithWidth(64)).Size);
+        Assert.True(e.Bounds.Contains(new Point(60, 60)));
+        Assert.False(e.Bounds.Contains(new Point(0, 0)));
+        Assert.Null(DrawingTools.Begin(ToolKind.Emoji, new Point(0, 0), Colors.White, 40, false));
+        Assert.Equal('E', ToolKind.Emoji.Key());
+        Assert.Equal(3, Enum.GetValues<RedactMode>().Length);
+    }
+
+    [Fact]
+    public void Store_ReplaceKeepsOrder()
+    {
+        var store = new AnnotationStore();
+        store.Add(Line(1));
+        var target = Line(2);
+        store.Add(target);
+        store.Add(Line(3));
+        store.Replace(target.Id, target with { From = new Point(9, 0) });
+        Assert.Equal(3, store.Items.Count);
+        Assert.Equal(9, ((LineAnnotation)store.Items[1]).From.X);
+    }
+
+    [Fact]
     public void SnapAngle_KeepsLength()
     {
         var snapped = DrawingTools.SnapAngle(new Point(0, 0), new Point(100, 8));

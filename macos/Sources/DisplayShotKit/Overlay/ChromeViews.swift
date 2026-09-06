@@ -27,7 +27,7 @@ class ChromeView: NSView {
     }
 
     static func makeButton(symbol: String, tooltip: String, target: AnyObject?, action: Selector?) -> NSButton {
-        let b = NSButton(image: symbolImage(symbol), target: target, action: action)
+        let b = RightClickButton(image: symbolImage(symbol), target: target, action: action)
         b.isBordered = false
         b.imagePosition = .imageOnly
         b.imageScaling = .scaleProportionallyDown
@@ -36,6 +36,20 @@ class ChromeView: NSView {
         b.focusRingType = .none
         b.setButtonType(.momentaryChange)
         return b
+    }
+}
+
+/// NSButton that also reports secondary clicks (used for the redaction mode menu).
+final class RightClickButton: NSButton {
+    var onRightClick: ((NSButton) -> Void)?
+
+    override func rightMouseDown(with event: NSEvent) {
+        if let onRightClick { onRightClick(self) } else { super.rightMouseDown(with: event) }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.control), let onRightClick { onRightClick(self); return }
+        super.mouseDown(with: event)
     }
 }
 
@@ -48,6 +62,8 @@ final class ToolPalette: ChromeView {
     var onSelectTool: ((ToolKind?) -> Void)?
     var onToggleColors: (() -> Void)?
     var onUndo: (() -> Void)?
+    var onSelectRedactMode: ((RedactMode) -> Void)?
+    private var redactMode: RedactMode = .pixelate
 
     private var toolButtons: [ToolKind: NSButton] = [:]
     private let colorButton = ChromeView.makeButton(symbol: "circle.fill", tooltip: "Colour (1–9)", target: nil, action: nil)
@@ -60,6 +76,7 @@ final class ToolPalette: ChromeView {
     }
 
     var colorButtonFrame: CGRect { colorButton.frame }
+    func buttonFrame(for tool: ToolKind) -> CGRect { toolButtons[tool]?.frame ?? .zero }
 
     init() {
         super.init(frame: CGRect(origin: .zero, size: ToolPalette.intrinsicSize))
@@ -71,6 +88,9 @@ final class ToolPalette: ChromeView {
             b.frame = CGRect(x: ToolPalette.pad, y: y, width: ToolPalette.buttonSize, height: ToolPalette.buttonSize)
             addSubview(b)
             toolButtons[tool] = b
+            if tool == .redact, let rb = b as? RightClickButton {
+                rb.onRightClick = { [weak self] button in self?.showRedactMenu(from: button) }
+            }
             y += ToolPalette.buttonSize + ToolPalette.spacing
         }
         colorButton.target = self
@@ -91,11 +111,29 @@ final class ToolPalette: ChromeView {
         onSelectTool?(selectedTool == tool ? nil : tool)
     }
 
+    private func showRedactMenu(from button: NSButton) {
+        let menu = NSMenu()
+        for (i, mode) in RedactMode.allCases.enumerated() {
+            let item = NSMenuItem(title: mode.title, action: #selector(redactModeChosen(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = i
+            item.state = mode == redactMode ? .on : .off
+            menu.addItem(item)
+        }
+        menu.popUp(positioning: nil, at: CGPoint(x: button.bounds.maxX + 4, y: 0), in: button)
+    }
+
+    @objc private func redactModeChosen(_ sender: NSMenuItem) {
+        onSelectRedactMode?(RedactMode.allCases[sender.tag])
+    }
+
     @objc private func colorTapped() { onToggleColors?() }
     @objc private func undoTapped() { onUndo?() }
 
-    func update(selectedTool: ToolKind?, color: NSColor, canUndo: Bool) {
+    func update(selectedTool: ToolKind?, color: NSColor, canUndo: Bool, redactMode: RedactMode) {
         self.selectedTool = selectedTool
+        self.redactMode = redactMode
+        toolButtons[.redact]?.toolTip = "Redact: \(redactMode.title) (X) — right-click to change"
         colorButton.contentTintColor = color
         undoButton.isEnabled = canUndo
         undoButton.contentTintColor = canUndo ? .white : NSColor(white: 1, alpha: 0.35)
@@ -215,6 +253,63 @@ final class ColorStrip: ChromeView {
         if let i = selectedIndex, i < swatches.count {
             Palette.highlight.setFill()
             NSBezierPath(roundedRect: swatches[i].frame.insetBy(dx: -2, dy: -2), xRadius: 5, yRadius: 5).fill()
+        }
+    }
+}
+
+/// Row of common emojis plus a "more" button that opens the system emoji picker.
+final class EmojiStrip: ChromeView {
+    static let presets = ["👍", "❤️", "😀", "😂", "🔥", "✅", "❌", "⭐", "👉", "⚠️", "💡", "🎯", "📌", "❓"]
+    static let cell: CGFloat = 24
+    static let spacing: CGFloat = 2
+    static let pad: CGFloat = 5
+
+    var onPick: ((String) -> Void)?
+    var onMore: (() -> Void)?
+    private var selected = ""
+    private var buttons: [NSButton] = []
+
+    static var intrinsicSize: CGSize {
+        let n = CGFloat(presets.count + 1)
+        return CGSize(width: n * cell + (n - 1) * spacing + 2 * pad, height: cell + 2 * pad)
+    }
+
+    init() {
+        super.init(frame: CGRect(origin: .zero, size: EmojiStrip.intrinsicSize))
+        var x = EmojiStrip.pad
+        for (i, emoji) in EmojiStrip.presets.enumerated() {
+            let b = NSButton(title: emoji, target: self, action: #selector(tapped(_:)))
+            b.isBordered = false
+            b.font = .systemFont(ofSize: 16)
+            b.focusRingType = .none
+            b.setButtonType(.momentaryChange)
+            b.tag = i
+            b.toolTip = "Stamp \(emoji)"
+            b.frame = CGRect(x: x, y: EmojiStrip.pad, width: EmojiStrip.cell, height: EmojiStrip.cell)
+            addSubview(b)
+            buttons.append(b)
+            x += EmojiStrip.cell + EmojiStrip.spacing
+        }
+        let more = ChromeView.makeButton(symbol: "plus.circle", tooltip: "More emoji… (opens the emoji picker)", target: self, action: #selector(moreTapped))
+        more.frame = CGRect(x: x, y: EmojiStrip.pad, width: EmojiStrip.cell, height: EmojiStrip.cell)
+        addSubview(more)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    @objc private func tapped(_ sender: NSButton) { onPick?(EmojiStrip.presets[sender.tag]) }
+    @objc private func moreTapped() { onMore?() }
+
+    func update(selected: String) {
+        self.selected = selected
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        if let i = EmojiStrip.presets.firstIndex(of: selected), i < buttons.count {
+            Palette.highlight.setFill()
+            NSBezierPath(roundedRect: buttons[i].frame.insetBy(dx: -1, dy: -1), xRadius: 5, yRadius: 5).fill()
         }
     }
 }
