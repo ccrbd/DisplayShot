@@ -65,7 +65,7 @@ public sealed class AnnotationStore
         switch (change)
         {
             case AddChange add: _items.RemoveAll(a => a.Id == add.Annotation.Id); break;
-            case Remove rm:
+            case RemoveChange rm:
                 // Reinsert in reverse removal order so every recorded index is valid again.
                 foreach (var (index, annotation) in Enumerable.Reverse(rm.Removed)) _items.Insert(Math.Min(index, _items.Count), annotation);
                 break;
