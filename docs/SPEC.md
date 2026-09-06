@@ -10,7 +10,7 @@ capture space: points × backing scale on macOS (one overlay per display), physi
 2. The app grabs every display into a frozen image, then shows a borderless full-screen overlay that
    paints the frozen image dimmed (black at 45%). The overlay itself never appears in the shot.
 3. Before a selection exists, a translucent hint ("Drag to select an area · full-screen key · Esc")
-   sits 10 % above the display centre so it does not cover the content people usually capture.
+   sits a quarter of the way down the display so it does not cover what people usually capture.
 4. The user selects, annotates, and exports. The overlay closes on copy, save, or cancel.
 5. The app keeps running in the menu bar / tray.
 
@@ -35,24 +35,29 @@ closes the overlay immediately (the user has decided not to take the shot).
   itself. Dragging the body moves it. Everything is clamped to the display.
 - Holding Shift constrains a drag/resize to a square.
 - Arrow keys nudge by 1 px (10 px with Shift). Alt+arrows grow/shrink the right/bottom edges.
-- A live `W × H` label sits by the selection.
+- The selection border is a white dotted line over a dark underlay. A live `W × H` label sits by it.
 - Cursor: crosshair before a selection exists and inside it while a drawing tool is active; the
   default arrow outside the selection and over the toolbars; resize/move cursors on handles/body.
 
 ## Tools
 
-Pen (freehand), Line, Arrow (filled head), Rectangle, Marker (highlighter), Text (inline), Emoji, Redact.
+Pen (freehand), Line, Arrow (filled head), Rectangle, Marker (highlighter), Text (inline), Emoji, Redact, Eraser.
 
-- The mouse wheel changes the active tool's width (font size for Text, block size for Redact). Each
-  tool remembers its own width; widths persist across sessions.
+- The mouse wheel changes the active tool's width (font size for Text/Emoji, block size for Redact).
+  While it changes, a circle (block for Redact) of the real size in the tool colour is shown
+  centred on the cursor next to the number. Each tool remembers its own width; widths persist.
 - Line and Arrow snap to 0/45/90° while Shift is held; Rectangle becomes a square.
 - Marker strokes are composited as one layer at 35% with a multiply blend, so overlapping strokes
   never double-darken and text underneath stays legible.
 - Text commits on click-away or Ctrl/Cmd+Return; an empty text box is discarded.
-- Emoji: a strip of common emojis plus "more" (system picker on macOS; typed/pasted or Win+. on
-  Windows). Clicking inside the selection stamps the current emoji; dragging an existing one moves
-  it; the wheel resizes the last one (and future stamps); `[` / `]` or Option/Alt+wheel rotate it
-  in 15° steps.
+- Emoji: the tool button shows the current emoji. Left-click activates it; right-click opens a
+  grid of 40 common emojis plus "more" (system picker on macOS; typed/pasted or Win+. on Windows),
+  which closes after a pick. Clicking inside the selection stamps the current emoji; dragging an
+  existing one moves it; the wheel resizes the last one (and future stamps); `[` / `]` or
+  Option/Alt+wheel rotate it in 15° steps.
+- Eraser: a dashed circle follows the cursor; click or drag to remove every annotation the circle
+  touches (strokes by their outline, shapes by their border, text/emoji/redaction by their box).
+  One eraser stroke undoes as a single step.
 - Redact has three modes — mosaic (default), blur, blackout — chosen by right-clicking the redact
   tool; the choice persists. Redact shows a live preview while dragging. Its block grid is anchored to the
   image origin, so moving or resizing a region never makes blocks shimmer. Holding Shift switches a

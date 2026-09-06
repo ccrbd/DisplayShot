@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import ScreenCaptureKit
 
 struct DisplayCapture {
@@ -43,6 +44,8 @@ final class ScreenCapturer {
             config.pixelFormat = kCVPixelFormatType_32BGRA
             config.colorSpaceName = CGColorSpace.sRGB
             let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+            Logger(subsystem: "com.ccrbd.DisplayShot", category: "capture")
+                .info("display \(id) frame \(Int(screen.frame.width))x\(Int(screen.frame.height)) pt @\(scale)x -> captured \(image.width)x\(image.height) px")
             results.append(DisplayCapture(screen: screen, image: image, scale: scale))
         }
         guard !results.isEmpty else { throw CaptureError.noDisplays }

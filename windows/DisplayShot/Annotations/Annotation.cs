@@ -3,7 +3,7 @@ using System.Windows.Media;
 
 namespace DisplayShot.Annotations;
 
-public enum ToolKind { Pen, Line, Arrow, Rectangle, Marker, Text, Emoji, Redact }
+public enum ToolKind { Pen, Line, Arrow, Rectangle, Marker, Text, Emoji, Redact, Eraser }
 
 public enum RedactMode { Pixelate, Blur, Blackout }
 
@@ -33,6 +33,7 @@ public static class ToolKindExtensions
         ToolKind.Text => 18,
         ToolKind.Emoji => 48,
         ToolKind.Redact => 8,
+        ToolKind.Eraser => 24,
         _ => 3,
     };
 
@@ -41,6 +42,7 @@ public static class ToolKindExtensions
         ToolKind.Text => (8, 96),
         ToolKind.Emoji => (16, 256),
         ToolKind.Redact => (2, 64),
+        ToolKind.Eraser => (6, 160),
         _ => (1, 32),
     };
 
@@ -54,6 +56,7 @@ public static class ToolKindExtensions
         ToolKind.Text => "Text",
         ToolKind.Emoji => "Emoji",
         ToolKind.Redact => "Redact",
+        ToolKind.Eraser => "Eraser",
         _ => tool.ToString(),
     };
 
@@ -68,6 +71,7 @@ public static class ToolKindExtensions
         ToolKind.Text => 'T',
         ToolKind.Emoji => 'E',
         ToolKind.Redact => 'X',
+        ToolKind.Eraser => 'D',
         _ => '?',
     };
 }

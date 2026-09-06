@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 enum ToolKind: String, CaseIterable, Codable {
-    case pen, line, arrow, rectangle, marker, text, emoji, redact
+    case pen, line, arrow, rectangle, marker, text, emoji, redact, eraser
 
     var defaultWidth: CGFloat {
         switch self {
@@ -14,6 +14,7 @@ enum ToolKind: String, CaseIterable, Codable {
         case .text: return 18
         case .emoji: return 48
         case .redact: return 8
+        case .eraser: return 24
         }
     }
 
@@ -22,6 +23,7 @@ enum ToolKind: String, CaseIterable, Codable {
         case .text: return 8...96
         case .emoji: return 16...256
         case .redact: return 2...64
+        case .eraser: return 6...160
         default: return 1...32
         }
     }
@@ -36,6 +38,7 @@ enum ToolKind: String, CaseIterable, Codable {
         case .text: return "Text"
         case .emoji: return "Emoji"
         case .redact: return "Redact"
+        case .eraser: return "Eraser"
         }
     }
 
@@ -49,6 +52,7 @@ enum ToolKind: String, CaseIterable, Codable {
         case .text: return "textformat"
         case .emoji: return "face.smiling"
         case .redact: return "eye.slash"
+        case .eraser: return "eraser"
         }
     }
 
@@ -63,6 +67,7 @@ enum ToolKind: String, CaseIterable, Codable {
         case .text: return "t"
         case .emoji: return "e"
         case .redact: return "x"
+        case .eraser: return "d"
         }
     }
 }

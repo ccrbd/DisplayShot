@@ -17,8 +17,9 @@ needed, and get it onto your clipboard or disk in a second. No accounts, no clou
 - **Global hotkey** freezes the screen behind a dimmed overlay, instantly.
 - **Selection** by click-and-drag, `⌘A` / `Ctrl+A` to snap to the full screen, eight resize handles,
   and drag to reposition. A live `W × H` readout follows the box.
-- **Annotation tools**: pen, line, arrow, rectangle, highlighter, inline text, and emoji stamps
-  (resize with the wheel, rotate with `[` / `]`, drag to move).
+- **Annotation tools**: pen, line, arrow, rectangle, highlighter, inline text, emoji stamps
+  (resize with the wheel, rotate with `[` / `]`, drag to move), and an eraser that removes any
+  drawing, text or emoji it touches (undoable).
 - **Redaction**: mosaic (default), blur, or blackout to hide passwords, tokens and emails.
   Right-click the redact tool to switch. The pixels are destroyed in the exported image, so
   nothing is recoverable.
@@ -45,13 +46,14 @@ uses `⌥`).
 | Cancel / close | `Esc` | `Esc` |
 | Pen / Line / Arrow | `P` / `L` / `A` | `P` / `L` / `A` |
 | Rectangle / Marker | `R` / `M` | `R` / `M` |
-| Text / Emoji / Redact | `T` / `E` / `X` | `T` / `E` / `X` |
+| Text / Emoji / Redact / Eraser | `T` / `E` / `X` / `D` | `T` / `E` / `X` / `D` |
+| Choose emoji / redact mode | right-click the tool | right-click the tool |
 | Rotate last emoji | `[` / `]` or `⌥`+wheel | `[` / `]` or `Alt`+wheel |
 | Move tool (no drawing) | `V` | `V` |
 | Pick colour | `1`–`9` | `1`–`9` |
 | Nudge selection 1 px / 10 px | arrows / `⇧`+arrows | arrows / `Shift`+arrows |
 | Resize selection edge | `⌥`+arrows | `Alt`+arrows |
-| Stroke width | mouse wheel | mouse wheel |
+| Stroke width (shown as a live circle) | mouse wheel | mouse wheel |
 | Constrain (square / 45° / blur) | hold `⇧` while dragging | hold `Shift` while dragging |
 
 `Esc` cancels whatever you are in the middle of (a shape being drawn, a text box, an emoji pick,

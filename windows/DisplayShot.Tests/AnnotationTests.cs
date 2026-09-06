@@ -78,6 +78,54 @@ public class AnnotationTests
     }
 
     [Fact]
+    public void Removal_IsUndoable_AndEraserStrokesUndoTogether()
+    {
+        var store = new AnnotationStore();
+        var a = Line(1); var b = Line(2); var c = Line(3);
+        store.Add(a); store.Add(b); store.Add(c);
+        store.Remove(b.Id);
+        Assert.Equal(new[] { a.Id, c.Id }, store.Items.Select(x => x.Id));
+        Assert.True(store.Undo());
+        Assert.Equal(new[] { a.Id, b.Id, c.Id }, store.Items.Select(x => x.Id));
+        Assert.True(store.Redo());
+        Assert.Equal(2, store.Items.Count);
+        store.BeginGroup(); store.Remove(a.Id); store.Remove(c.Id); store.EndGroup();
+        Assert.True(store.IsEmpty);
+        Assert.True(store.Undo());
+        Assert.Equal(new[] { a.Id, c.Id }, store.Items.Select(x => x.Id));
+        store.BeginGroup(); store.EndGroup();
+        Assert.True(store.CanUndo);
+    }
+
+    [Fact]
+    public void EraserHitTesting()
+    {
+        var pen = new PenAnnotation(new List<Point> { new(0, 0), new(100, 0) }, new Stroke(Colors.Black, 4));
+        Assert.True(AnnotationHitTester.Hits(pen, new Point(50, 8), 8));
+        Assert.False(AnnotationHitTester.Hits(pen, new Point(50, 30), 8));
+        var rect = new RectangleAnnotation(new Rect(10, 10, 100, 60), new Stroke(Colors.Black, 4));
+        Assert.True(AnnotationHitTester.Hits(rect, new Point(60, 12), 5));
+        Assert.False(AnnotationHitTester.Hits(rect, new Point(60, 40), 5));
+        var redact = new RedactAnnotation(new Rect(0, 0, 20, 20), RedactMode.Blackout, 8);
+        Assert.True(AnnotationHitTester.Hits(redact, new Point(10, 10), 2));
+        var emoji = new EmojiAnnotation(new Point(50, 50), "⭐", 30, 0, Colors.White);
+        Assert.True(AnnotationHitTester.Hits(emoji, new Point(62, 50), 4));
+        Assert.False(AnnotationHitTester.Hits(emoji, new Point(100, 100), 4));
+        Assert.Equal(5, AnnotationHitTester.DistanceToSegment(new Point(5, 5), new Point(0, 0), new Point(10, 0)), 3);
+    }
+
+    [Fact]
+    public void Redaction_KeepsModeWhileDragging()
+    {
+        var start = new RedactAnnotation(new Rect(10, 10, 0, 0), RedactMode.Blackout, 8);
+        var dragged = (RedactAnnotation)DrawingTools.Update(start, new Point(10, 10), new Point(40, 30), false);
+        Assert.Equal(RedactMode.Blackout, dragged.Mode);
+        Assert.Equal(new Rect(10, 10, 30, 20), dragged.Rect);
+        Assert.Equal('D', ToolKind.Eraser.Key());
+        Assert.Null(DrawingTools.Begin(ToolKind.Eraser, new Point(0, 0), Colors.White, 20, false));
+    }
+
+    [Fact]
     public void SnapAngle_KeepsLength()
     {
         var snapped = DrawingTools.SnapAngle(new Point(0, 0), new Point(100, 8));
@@ -103,7 +151,7 @@ public class AnnotationTests
         Assert.Equal(2, pen2.Points.Count);
         var redact = DrawingTools.Begin(ToolKind.Redact, new Point(10, 10), Colors.White, 8, false)!;
         var blurred = (RedactAnnotation)DrawingTools.Update(redact, new Point(10, 10), new Point(30, 20), true);
-        Assert.Equal(RedactMode.Blur, blurred.Mode);
+        Assert.Equal(RedactMode.Pixelate, blurred.Mode); // DrawingTools leaves the mode alone; the session applies Shift/right-click
         Assert.Equal(new Rect(10, 10, 20, 10), blurred.Rect);
     }
 }

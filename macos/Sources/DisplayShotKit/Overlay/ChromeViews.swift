@@ -63,6 +63,7 @@ final class ToolPalette: ChromeView {
     var onToggleColors: (() -> Void)?
     var onUndo: (() -> Void)?
     var onSelectRedactMode: ((RedactMode) -> Void)?
+    var onToggleEmojiPicker: (() -> Void)?
     private var redactMode: RedactMode = .pixelate
 
     private var toolButtons: [ToolKind: NSButton] = [:]
@@ -90,6 +91,12 @@ final class ToolPalette: ChromeView {
             toolButtons[tool] = b
             if tool == .redact, let rb = b as? RightClickButton {
                 rb.onRightClick = { [weak self] button in self?.showRedactMenu(from: button) }
+            }
+            if tool == .emoji, let eb = b as? RightClickButton {
+                eb.image = nil
+                eb.imagePosition = .noImage
+                eb.font = .systemFont(ofSize: 17)
+                eb.onRightClick = { [weak self] _ in self?.onToggleEmojiPicker?() }
             }
             y += ToolPalette.buttonSize + ToolPalette.spacing
         }
@@ -130,9 +137,13 @@ final class ToolPalette: ChromeView {
     @objc private func colorTapped() { onToggleColors?() }
     @objc private func undoTapped() { onUndo?() }
 
-    func update(selectedTool: ToolKind?, color: NSColor, canUndo: Bool, redactMode: RedactMode) {
+    func update(selectedTool: ToolKind?, color: NSColor, canUndo: Bool, redactMode: RedactMode, emoji: String) {
         self.selectedTool = selectedTool
         self.redactMode = redactMode
+        if let eb = toolButtons[.emoji] {
+            eb.title = emoji
+            eb.toolTip = "Emoji \(emoji) (E) — right-click to choose another"
+        }
         toolButtons[.redact]?.toolTip = "Redact: \(redactMode.title) (X) — right-click to change"
         colorButton.contentTintColor = color
         undoButton.isEnabled = canUndo
@@ -257,10 +268,17 @@ final class ColorStrip: ChromeView {
     }
 }
 
-/// Row of common emojis plus a "more" button that opens the system emoji picker.
+/// Grid of common emojis plus a "more" button that opens the system emoji picker.
+/// Shown by right-clicking the emoji tool; hides after a pick.
 final class EmojiStrip: ChromeView {
-    static let presets = ["👍", "❤️", "😀", "😂", "🔥", "✅", "❌", "⭐", "👉", "⚠️", "💡", "🎯", "📌", "❓"]
-    static let cell: CGFloat = 24
+    static let presets = [
+        "👍", "👎", "❤️", "😀", "😂", "😍", "🤔", "😮", "😢", "😡",
+        "🔥", "✅", "❌", "⭐", "👉", "👈", "👆", "👇", "⚠️", "💡",
+        "🎯", "📌", "❓", "❗", "💯", "🎉", "👀", "🙏", "👏", "💪",
+        "🚀", "⏰", "🔒", "🔑", "📷", "✏️", "🐛", "💬", "🏁", "✨",
+    ]
+    static let columns = 10
+    static let cell: CGFloat = 26
     static let spacing: CGFloat = 2
     static let pad: CGFloat = 5
 
@@ -270,13 +288,20 @@ final class EmojiStrip: ChromeView {
     private var buttons: [NSButton] = []
 
     static var intrinsicSize: CGSize {
-        let n = CGFloat(presets.count + 1)
-        return CGSize(width: n * cell + (n - 1) * spacing + 2 * pad, height: cell + 2 * pad)
+        let cols = CGFloat(columns)
+        let rows = CGFloat((presets.count + 1 + columns - 1) / columns)
+        return CGSize(width: cols * cell + (cols - 1) * spacing + 2 * pad,
+                      height: rows * cell + (rows - 1) * spacing + 2 * pad)
     }
 
     init() {
         super.init(frame: CGRect(origin: .zero, size: EmojiStrip.intrinsicSize))
-        var x = EmojiStrip.pad
+        func cellFrame(_ i: Int) -> CGRect {
+            let col = CGFloat(i % EmojiStrip.columns), row = CGFloat(i / EmojiStrip.columns)
+            return CGRect(x: EmojiStrip.pad + col * (EmojiStrip.cell + EmojiStrip.spacing),
+                          y: EmojiStrip.pad + row * (EmojiStrip.cell + EmojiStrip.spacing),
+                          width: EmojiStrip.cell, height: EmojiStrip.cell)
+        }
         for (i, emoji) in EmojiStrip.presets.enumerated() {
             let b = NSButton(title: emoji, target: self, action: #selector(tapped(_:)))
             b.isBordered = false
@@ -285,13 +310,12 @@ final class EmojiStrip: ChromeView {
             b.setButtonType(.momentaryChange)
             b.tag = i
             b.toolTip = "Stamp \(emoji)"
-            b.frame = CGRect(x: x, y: EmojiStrip.pad, width: EmojiStrip.cell, height: EmojiStrip.cell)
+            b.frame = cellFrame(i)
             addSubview(b)
             buttons.append(b)
-            x += EmojiStrip.cell + EmojiStrip.spacing
         }
         let more = ChromeView.makeButton(symbol: "plus.circle", tooltip: "More emoji… (opens the emoji picker)", target: self, action: #selector(moreTapped))
-        more.frame = CGRect(x: x, y: EmojiStrip.pad, width: EmojiStrip.cell, height: EmojiStrip.cell)
+        more.frame = cellFrame(EmojiStrip.presets.count)
         addSubview(more)
     }
 
@@ -314,17 +338,23 @@ final class EmojiStrip: ChromeView {
     }
 }
 
-/// Small pill showing the current stroke width next to the cursor after a wheel change.
+/// Shows the actual stroke size as a circle (or block) in the current colour, plus the number,
+/// centred on the cursor while the wheel changes it.
 final class StrokeWidthBadge: NSView {
-    private let label = NSTextField(labelWithString: "")
+    enum Shape { case circle, square, none }
+
+    private var diameter: CGFloat = 0
+    private var color: NSColor = .white
+    private var shape: Shape = .circle
+    private var text = ""
     private var hideWork: DispatchWorkItem?
+    private static let attrs: [NSAttributedString.Key: Any] = [
+        .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold),
+        .foregroundColor: NSColor.white,
+    ]
 
     init() {
         super.init(frame: CGRect(x: 0, y: 0, width: 60, height: 24))
-        label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
-        label.textColor = .white
-        label.alignment = .center
-        addSubview(label)
         isHidden = true
     }
 
@@ -334,16 +364,35 @@ final class StrokeWidthBadge: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draw(_ dirtyRect: NSRect) {
+        let d = diameter
+        let preview = CGRect(x: (previewBox - d) / 2, y: (bounds.height - d) / 2, width: d, height: d)
+        if shape != .none, d > 0 {
+            color.setFill()
+            let path = shape == .circle ? NSBezierPath(ovalIn: preview) : NSBezierPath(rect: preview)
+            path.fill()
+            NSColor(white: 1, alpha: 0.9).setStroke()
+            let outline = shape == .circle ? NSBezierPath(ovalIn: preview.insetBy(dx: -1, dy: -1)) : NSBezierPath(rect: preview.insetBy(dx: -1, dy: -1))
+            outline.lineWidth = 1
+            outline.stroke()
+        }
+        let size = (text as NSString).size(withAttributes: StrokeWidthBadge.attrs)
+        let pill = CGRect(x: previewBox + 6, y: (bounds.height - size.height) / 2 - 3, width: size.width + 12, height: size.height + 6)
         Palette.chrome.setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2).fill()
+        NSBezierPath(roundedRect: pill, xRadius: pill.height / 2, yRadius: pill.height / 2).fill()
+        (text as NSString).draw(at: CGPoint(x: pill.minX + 6, y: pill.minY + 3), withAttributes: StrokeWidthBadge.attrs)
     }
 
-    func show(_ text: String, near point: CGPoint, in bounds: CGRect) {
-        label.stringValue = text
-        label.sizeToFit()
-        let size = CGSize(width: label.frame.width + 20, height: 24)
-        label.frame = CGRect(x: 10, y: (size.height - label.frame.height) / 2, width: label.frame.width, height: label.frame.height)
-        frame = CGRect(origin: CGPoint(x: point.x + 18, y: point.y - 32), size: size).fitted(in: bounds)
+    private var previewBox: CGFloat { max(diameter + 4, 24) }
+
+    /// `width` is the real on-screen size in points; the preview is centred on `point`.
+    func show(width: CGFloat, text: String, color: NSColor, shape: Shape, at point: CGPoint, in bounds: CGRect) {
+        self.diameter = shape == .none ? 0 : min(max(width, 2), 200)
+        self.color = color
+        self.shape = shape
+        self.text = text
+        let textSize = (text as NSString).size(withAttributes: StrokeWidthBadge.attrs)
+        let size = CGSize(width: previewBox + 6 + textSize.width + 12, height: max(previewBox, 26))
+        frame = CGRect(origin: CGPoint(x: point.x - previewBox / 2, y: point.y - size.height / 2), size: size).fitted(in: bounds)
         isHidden = false
         needsDisplay = true
         hideWork?.cancel()

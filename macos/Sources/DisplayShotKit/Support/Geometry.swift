@@ -36,6 +36,15 @@ extension CGPoint {
     static func - (a: CGPoint, b: CGPoint) -> CGPoint { CGPoint(x: a.x - b.x, y: a.y - b.y) }
 }
 
+/// Distance from `p` to the segment `a`–`b`.
+func distance(from p: CGPoint, toSegment a: CGPoint, _ b: CGPoint) -> CGFloat {
+    let dx = b.x - a.x, dy = b.y - a.y
+    let len2 = dx * dx + dy * dy
+    guard len2 > 0 else { return p.distance(to: a) }
+    let t = max(0, min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2))
+    return p.distance(to: CGPoint(x: a.x + t * dx, y: a.y + t * dy))
+}
+
 @inline(__always) func clamp<T: Comparable>(_ v: T, _ lo: T, _ hi: T) -> T { min(max(v, lo), hi) }
 
 /// Snaps the segment `a -> b` to the nearest multiple of 45 degrees, preserving its length.

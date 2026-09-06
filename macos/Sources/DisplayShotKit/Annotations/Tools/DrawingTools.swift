@@ -12,7 +12,7 @@ enum DrawingTools {
         case .arrow: return Annotation(.arrow(p, p, stroke))
         case .rectangle: return Annotation(.rectangle(CGRect(origin: p, size: .zero), stroke))
         case .redact: return Annotation(.redact(CGRect(origin: p, size: .zero), blur ? .blur : .pixelate, width))
-        case .text, .emoji: return nil
+        case .text, .emoji, .eraser: return nil
         }
     }
 
@@ -33,8 +33,9 @@ enum DrawingTools {
             copy.kind = .arrow(a, constrain ? snapAngle(from: a, to: p) : p, s)
         case .rectangle(_, let s):
             copy.kind = .rectangle(rect(from: origin, to: p, square: constrain), s)
-        case .redact(_, _, let block):
-            copy.kind = .redact(CGRect(corner: origin, p), constrain ? .blur : .pixelate, block)
+        case .redact(_, let mode, let block):
+            // The mode is owned by the session (right-click choice / Shift); only the rect changes here.
+            copy.kind = .redact(CGRect(corner: origin, p), mode, block)
         case .text, .emoji:
             break
         }

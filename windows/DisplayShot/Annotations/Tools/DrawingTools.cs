@@ -39,7 +39,8 @@ public static class DrawingTools
             case RectangleAnnotation rect:
                 return rect with { Rect = RectFrom(origin, p, constrain) };
             case RedactAnnotation redact:
-                return redact with { Rect = new Rect(origin, p), Mode = constrain ? RedactMode.Blur : RedactMode.Pixelate };
+                // The mode is owned by the session (right-click choice / Shift); only the rect changes here.
+                return redact with { Rect = new Rect(origin, p) };
             default:
                 return annotation;
         }

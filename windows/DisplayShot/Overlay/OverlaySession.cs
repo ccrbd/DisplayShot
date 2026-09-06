@@ -16,7 +16,7 @@ namespace DisplayShot.Overlay;
 /// annotation list and every interaction rule (mouse, keyboard, wheel, Esc cascade, export).</summary>
 public sealed class OverlaySession
 {
-    private enum Phase { Idle, Selecting, Selected, Resizing, Moving, Drawing, MovingEmoji }
+    private enum Phase { Idle, Selecting, Selected, Resizing, Moving, Drawing, MovingEmoji, Erasing }
 
     public VirtualScreenCapture Capture { get; }
     public AnnotationStore Store { get; } = new();
@@ -50,6 +50,14 @@ public sealed class OverlaySession
     private Border? _emojiStrip;
     private TextBox? _emojiReceiver;
     private bool IsEmojiPicking => _emojiReceiver is not null;
+    private bool _emojiPickerVisible;
+    private Button? _emojiToolButton;
+
+    /// <summary>Eraser circle to draw under the cursor, when the eraser is active over the selection.</summary>
+    public (Point Center, double Radius)? EraserFootprint =>
+        _tool == ToolKind.Eraser && ShowsChrome && Selection is { } s && s.Rect.Contains(_lastPoint)
+            ? (_lastPoint, WidthFor(ToolKind.Eraser) / 2)
+            : null;
 
     // Chrome
     private Border? _palette;
@@ -137,6 +145,7 @@ public sealed class OverlaySession
         if (IsTextEditing) { CommitText(); return; }
         if (IsEmojiPicking) RemoveEmojiReceiver();
         _colorStripVisible = false;
+        _emojiPickerVisible = false;
 
         if (Selection is { } sel)
         {
@@ -150,6 +159,7 @@ public sealed class OverlaySession
                     if (_tool is { } tool)
                     {
                         if (tool == ToolKind.Text) BeginText(p);
+                        else if (tool == ToolKind.Eraser) { Store.BeginGroup(); _phase = Phase.Erasing; EraseAt(p); }
                         else if (tool == ToolKind.Emoji)
                         {
                             if (EmojiHit(p) is { } hit)
@@ -198,7 +208,7 @@ public sealed class OverlaySession
         _lastPoint = p;
         ApplyDrag(p, e.KeyboardShiftDown());
         UpdateCursor(p);
-        if (_phase is Phase.Selecting or Phase.Resizing or Phase.Moving or Phase.Drawing or Phase.MovingEmoji) Invalidate();
+        if (_phase is Phase.Selecting or Phase.Resizing or Phase.Moving or Phase.Drawing or Phase.MovingEmoji or Phase.Erasing || _tool == ToolKind.Eraser) Invalidate();
     }
 
     private void ApplyDrag(Point p, bool shift)
@@ -215,7 +225,12 @@ public sealed class OverlaySession
                 sel.MoveTo(new Point(p.X - _grabOffset.X, p.Y - _grabOffset.Y));
                 break;
             case Phase.Drawing when InProgress is { } ip && Selection is { } s:
-                InProgress = DrawingTools.Update(ip, _dragOrigin, ClampToSelection(p), shift);
+                var updated = DrawingTools.Update(ip, _dragOrigin, ClampToSelection(p), shift);
+                if (updated is RedactAnnotation ru) updated = ru with { Mode = shift ? RedactMode.Blur : _redactMode };
+                InProgress = updated;
+                break;
+            case Phase.Erasing:
+                EraseAt(p);
                 break;
             case Phase.MovingEmoji when Store.Item(_movingEmojiId) is EmojiAnnotation e:
                 Store.Replace(e.Id, e with { Center = ClampToSelection(new Point(p.X - _grabOffset.X, p.Y - _grabOffset.Y)) });
@@ -238,6 +253,10 @@ public sealed class OverlaySession
             case Phase.MovingEmoji:
                 _phase = Phase.Selected;
                 break;
+            case Phase.Erasing:
+                Store.EndGroup();
+                _phase = Phase.Selected;
+                break;
             case Phase.Drawing:
                 if (InProgress is { IsMeaningful: true } ip) Store.Add(ip);
                 InProgress = null;
@@ -255,7 +274,7 @@ public sealed class OverlaySession
         if (tool == ToolKind.Emoji && Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
         {
             RotateLastEmoji(steps * 15);
-            ShowWidthBadge("rotate");
+            ShowWidthBadge("rotate", 0, _color, BadgeShape.None);
             return;
         }
         var (min, max) = tool.WidthRange();
@@ -267,7 +286,10 @@ public sealed class OverlaySession
         if (tool == ToolKind.Emoji) UpdateLastEmoji(em => em with { Size = w });
         if (IsTextEditing && tool == ToolKind.Text) ApplyTextStyle();
         var unit = tool is ToolKind.Text or ToolKind.Emoji ? "pt" : tool == ToolKind.Redact ? "block" : "px";
-        ShowWidthBadge($"{(int)w} {unit}");
+        var shape = tool is ToolKind.Text or ToolKind.Emoji ? BadgeShape.None : tool == ToolKind.Redact ? BadgeShape.Square : BadgeShape.Circle;
+        var badgeColor = tool == ToolKind.Marker ? Color.FromArgb(128, _color.R, _color.G, _color.B)
+            : tool is ToolKind.Eraser or ToolKind.Redact ? Color.FromRgb(0xD9, 0xD9, 0xD9) : _color;
+        ShowWidthBadge($"{(int)w} {unit}", w, badgeColor, shape);
         Invalidate();
     }
 
@@ -299,13 +321,34 @@ public sealed class OverlaySession
         Invalidate();
     }
 
+    // MARK: Eraser
+
+    private void EraseAt(Point p)
+    {
+        if (Selection is not { } sel) return;
+        var q = SelectionModel.ClampPoint(p, sel.Rect);
+        var r = WidthFor(ToolKind.Eraser) / 2;
+        foreach (var a in Store.Items.Where(a => AnnotationHitTester.Hits(a, q, r)).ToList())
+            Store.Remove(a.Id);
+    }
+
     // MARK: Emoji tool
+
+    private void ToggleEmojiPicker()
+    {
+        if (_tool != ToolKind.Emoji) _tool = ToolKind.Emoji;
+        _emojiPickerVisible = !_emojiPickerVisible;
+        _colorStripVisible = false;
+        Invalidate();
+    }
 
     private void SetEmoji(string emoji)
     {
         _currentEmoji = emoji;
         _settings.LastEmoji = emoji;
         _settings.Save();
+        _emojiPickerVisible = false;
+        if (_tool != ToolKind.Emoji) _tool = ToolKind.Emoji;
         Invalidate();
     }
 
@@ -339,6 +382,7 @@ public sealed class OverlaySession
     {
         RemoveEmojiReceiver();
         if (_host is null) return;
+        _emojiPickerVisible = false;
         _emojiReceiver = new TextBox
         {
             Width = 120,
@@ -553,6 +597,7 @@ public sealed class OverlaySession
         if (IsEmojiPicking) { RemoveEmojiReceiver(); Invalidate(); return; }
         if (_phase == Phase.Drawing) { InProgress = null; _phase = Phase.Selected; Invalidate(); return; }
         if (_colorStripVisible) { _colorStripVisible = false; Invalidate(); return; }
+        if (_emojiPickerVisible) { _emojiPickerVisible = false; Invalidate(); return; }
         Dismiss();
     }
 
@@ -656,7 +701,7 @@ public sealed class OverlaySession
         _palette!.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         _actionBar!.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         _colorStrip!.Visibility = show && _colorStripVisible ? Visibility.Visible : Visibility.Collapsed;
-        _emojiStrip!.Visibility = show && _tool == ToolKind.Emoji ? Visibility.Visible : Visibility.Collapsed;
+        _emojiStrip!.Visibility = show && _emojiPickerVisible ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
 
         var sel = Selection!.Rect;
@@ -673,10 +718,17 @@ public sealed class OverlaySession
         if (stripX < 0) stripX = layout.Palette.Right + ToolbarLayout.Gap;
         Place(_colorStrip, new Rect(stripX, layout.Palette.Top, stripW, ButtonHeight));
 
-        var emojiW = _emojiStrip.DesiredSizeOr(360);
+        var emojiW = _emojiStrip.DesiredSizeOr(300);
+        var emojiH = _emojiStrip.DesiredSizeHeight(140);
         var emojiX = layout.Palette.Left - ToolbarLayout.Gap - emojiW;
         if (emojiX < 0) emojiX = layout.Palette.Right + ToolbarLayout.Gap;
-        Place(_emojiStrip, new Rect(emojiX, layout.Palette.Top + ButtonHeight, emojiW, ButtonHeight));
+        var emojiY = SelectionModel.Clamp(layout.Palette.Top, 0, Math.Max(0, _bounds.Height - emojiH));
+        Place(_emojiStrip, new Rect(emojiX, emojiY, emojiW, emojiH));
+        if (_emojiToolButton?.Content is TextBlock emojiLabel)
+        {
+            emojiLabel.Text = _currentEmoji;
+            _emojiToolButton.ToolTip = $"Emoji {_currentEmoji} (E) — right-click to choose another";
+        }
 
         foreach (var (tool, highlight) in _toolHighlights)
         {
@@ -684,7 +736,7 @@ public sealed class OverlaySession
             if (tool == ToolKind.Redact && highlight.Child is Button rb)
                 rb.ToolTip = $"Redact: {_redactMode.Title()} (X) — right-click to change";
         }
-        if (_emojiStrip.Child is StackPanel emojiPanel)
+        if (_emojiStrip.Child is WrapPanel emojiPanel)
             foreach (var child in emojiPanel.Children.OfType<Button>())
                 child.Background = child.Tag as string == _currentEmoji ? OverlayChrome.Highlight : Brushes.Transparent;
         if (_colorButton is not null) _colorButton.Fill = new SolidColorBrush(_color);
@@ -705,6 +757,12 @@ public sealed class OverlaySession
         foreach (var tool in ToolKindExtensions.All)
         {
             var button = OverlayChrome.ToolButton(tool);
+            if (tool == ToolKind.Emoji)
+            {
+                if (button.Content is TextBlock tb) { tb.Text = _currentEmoji; tb.FontFamily = new FontFamily("Segoe UI Emoji"); tb.FontSize = 15; }
+                button.MouseRightButtonUp += (_, args) => { args.Handled = true; ToggleEmojiPicker(); };
+                _emojiToolButton = button;
+            }
             var highlight = new Border { CornerRadius = new CornerRadius(6), Child = button, Margin = new Thickness(0, 1, 0, 1) };
             button.Click += (_, _) => SelectTool(tool);
             if (tool == ToolKind.Redact)
@@ -763,7 +821,7 @@ public sealed class OverlaySession
         _colorStrip = OverlayChrome.Panel(stripStack);
 
         // Emoji strip: common emojis plus "+" for any other (typed/pasted, or via Win+.).
-        var emojiStack = new StackPanel { Orientation = Orientation.Horizontal };
+        var emojiStack = new WrapPanel { Orientation = Orientation.Horizontal, Width = OverlayChrome.EmojiColumns * 26 };
         foreach (var emoji in OverlayChrome.EmojiPresets)
         {
             var b = OverlayChrome.LabelButton(emoji, $"Stamp {emoji}", 15, 26);
@@ -794,22 +852,45 @@ public sealed class OverlaySession
         Canvas.SetTop(element, rect.Y);
     }
 
-    private void ShowWidthBadge(string text)
+    private enum BadgeShape { Circle, Square, None }
+
+    /// <summary>Shows the real stroke size as a circle/block in the tool colour, centred on the cursor, plus the number.</summary>
+    private void ShowWidthBadge(string text, double width, Color color, BadgeShape shape)
     {
         if (_host is null) return;
         if (_widthBadge is null)
         {
-            _widthBadge = new Border
-            {
-                Background = OverlayChrome.Chrome,
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(10, 4, 10, 4),
-            };
+            _widthBadge = new Border { Background = Brushes.Transparent };
             _host.Children.Add(_widthBadge);
         }
-        _widthBadge.Child = new TextBlock { Text = text, Foreground = Brushes.White, FontSize = 12, FontWeight = FontWeights.SemiBold };
-        Canvas.SetLeft(_widthBadge, _lastPoint.X + 18);
-        Canvas.SetTop(_widthBadge, _lastPoint.Y - 30);
+        var d = shape == BadgeShape.None ? 0 : Math.Min(Math.Max(width, 2), 200);
+        var box = Math.Max(d + 4, 24);
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var preview = new Grid { Width = box, Height = box };
+        if (shape != BadgeShape.None)
+        {
+            System.Windows.Shapes.Shape s = shape == BadgeShape.Circle
+                ? new System.Windows.Shapes.Ellipse()
+                : new System.Windows.Shapes.Rectangle();
+            s.Width = d; s.Height = d;
+            s.Fill = new SolidColorBrush(color);
+            s.Stroke = Brushes.White; s.StrokeThickness = 1;
+            s.HorizontalAlignment = HorizontalAlignment.Center; s.VerticalAlignment = VerticalAlignment.Center;
+            preview.Children.Add(s);
+        }
+        row.Children.Add(preview);
+        row.Children.Add(new Border
+        {
+            Background = OverlayChrome.Chrome,
+            CornerRadius = new CornerRadius(11),
+            Padding = new Thickness(8, 3, 8, 3),
+            Margin = new Thickness(6, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock { Text = text, Foreground = Brushes.White, FontSize = 12, FontWeight = FontWeights.SemiBold },
+        });
+        _widthBadge.Child = row;
+        Canvas.SetLeft(_widthBadge, _lastPoint.X - box / 2);
+        Canvas.SetTop(_widthBadge, _lastPoint.Y - box / 2);
         _widthBadge.Visibility = Visibility.Visible;
         _badgeTimer?.Stop();
         _badgeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
@@ -825,6 +906,7 @@ public sealed class OverlaySession
         Cursor cursor = _phase switch
         {
             Phase.Moving or Phase.MovingEmoji => Cursors.SizeAll,
+            Phase.Erasing => Cursors.Cross,
             Phase.Resizing => HandleCursor(_activeHandle),
             _ => sel.HitTest(p) switch
             {

@@ -50,6 +50,7 @@ final class OverlayView: NSView {
         palette.onToggleColors = { [weak self] in self?.session.toggleColorStrip() }
         palette.onUndo = { [weak self] in self?.session.undo() }
         palette.onSelectRedactMode = { [weak self] mode in self?.session.setRedactMode(mode) }
+        palette.onToggleEmojiPicker = { [weak self] in self?.session.toggleEmojiPicker() }
         emojiStrip.onPick = { [weak self] emoji in self?.session.setEmoji(emoji) }
         emojiStrip.onMore = { [weak self] in self?.session.beginEmojiPick() }
         actionBar.onCopy = { [weak self] in self?.session.copyToClipboard() }
@@ -96,6 +97,7 @@ final class OverlayView: NSView {
     override func mouseMoved(with event: NSEvent) {
         let p = location(event)
         session.mouseMoved(at: p, index: index)
+        if session.activeTool == .eraser { needsDisplay = true }
         if isOverChrome(p) {
             NSCursor.arrow.set()
         } else {
@@ -175,11 +177,26 @@ final class OverlayView: NSView {
         }
         ctx.restoreGState()
 
+        // Dotted border: a solid dark line underneath keeps the dots visible on any background.
         ctx.setLineWidth(1)
-        ctx.setStrokeColor(NSColor(white: 0, alpha: 0.5).cgColor)
-        ctx.stroke(sel.insetBy(dx: -1.5, dy: -1.5))
-        ctx.setStrokeColor(NSColor.white.cgColor)
+        ctx.setStrokeColor(NSColor(white: 0, alpha: 0.55).cgColor)
         ctx.stroke(sel.insetBy(dx: -0.5, dy: -0.5))
+        ctx.setStrokeColor(NSColor.white.cgColor)
+        ctx.setLineDash(phase: 0, lengths: [4, 4])
+        ctx.stroke(sel.insetBy(dx: -0.5, dy: -0.5))
+        ctx.setLineDash(phase: 0, lengths: [])
+
+        // Eraser footprint follows the cursor while the tool is active.
+        if session.activeTool == .eraser, session.showsChrome, sel.contains(session.lastPoint) {
+            let r = session.width(for: .eraser) / 2
+            let circle = CGRect(x: session.lastPoint.x - r, y: session.lastPoint.y - r, width: 2 * r, height: 2 * r)
+            ctx.setFillColor(NSColor(white: 1, alpha: 0.18).cgColor)
+            ctx.fillEllipse(in: circle)
+            ctx.setStrokeColor(NSColor.white.cgColor)
+            ctx.setLineDash(phase: 0, lengths: [3, 3])
+            ctx.strokeEllipse(in: circle)
+            ctx.setLineDash(phase: 0, lengths: [])
+        }
 
         if session.showsHandles, let model = session.selection {
             for (_, r) in model.handleRects() {
@@ -200,9 +217,9 @@ final class OverlayView: NSView {
             .foregroundColor: NSColor(white: 1, alpha: 0.85),
         ]
         let size = (text as NSString).size(withAttributes: attrs)
-        // 10 % above centre so the box does not cover what people usually want to capture,
+        // A quarter of the way down the screen, well clear of the centre people usually capture,
         // and translucent so the frozen screen stays visible through it.
-        let centerY = bounds.height * 0.40
+        let centerY = bounds.height * 0.25
         let rect = CGRect(x: bounds.midX - size.width / 2 - 14, y: centerY - size.height / 2 - 8,
                           width: size.width + 28, height: size.height + 16)
         Palette.chrome.withAlphaComponent(0.55).setFill()
@@ -230,7 +247,7 @@ final class OverlayView: NSView {
         palette.isHidden = !show
         actionBar.isHidden = !show
         colorStrip.isHidden = !(show && session.colorStripVisible)
-        emojiStrip.isHidden = !(show && session.activeTool == .emoji)
+        emojiStrip.isHidden = !(show && session.emojiPickerVisible)
 
         if active, let model = session.selection {
             let sel = model.rect
@@ -257,7 +274,7 @@ final class OverlayView: NSView {
             if ex < bounds.minX { ex = layout.palette.maxX + ToolbarLayout.gap }
             emojiStrip.frame = CGRect(x: ex, y: ey, width: emojiSize.width, height: emojiSize.height).fitted(in: bounds)
 
-            palette.update(selectedTool: session.activeTool, color: session.color, canUndo: session.store.canUndo, redactMode: session.redactMode)
+            palette.update(selectedTool: session.activeTool, color: session.color, canUndo: session.store.canUndo, redactMode: session.redactMode, emoji: session.currentEmoji)
             colorStrip.update(selectedIndex: session.colorIndex)
             emojiStrip.update(selected: session.currentEmoji)
         } else {
@@ -312,8 +329,8 @@ final class OverlayView: NSView {
 
     // MARK: Feedback
 
-    func showWidthBadge(_ text: String, near p: CGPoint) {
-        widthBadge.show(text, near: p, in: bounds)
+    func showWidthBadge(width: CGFloat, text: String, color: NSColor, shape: StrokeWidthBadge.Shape, at p: CGPoint) {
+        widthBadge.show(width: width, text: text, color: color, shape: shape, at: p, in: bounds)
     }
 
     func flashError(_ text: String) {

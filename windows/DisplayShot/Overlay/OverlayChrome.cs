@@ -24,7 +24,13 @@ public static class OverlayChrome
     };
 
     public static readonly string[] EmojiPresets =
-        { "👍", "❤️", "😀", "😂", "🔥", "✅", "❌", "⭐", "👉", "⚠️", "💡", "🎯", "📌", "❓" };
+    {
+        "👍", "👎", "❤️", "😀", "😂", "😍", "🤔", "😮", "😢", "😡",
+        "🔥", "✅", "❌", "⭐", "👉", "👈", "👆", "👇", "⚠️", "💡",
+        "🎯", "📌", "❓", "❗", "💯", "🎉", "👀", "🙏", "👏", "💪",
+        "🚀", "⏰", "🔒", "🔑", "📷", "✏️", "🐛", "💬", "🏁", "✨",
+    };
+    public const int EmojiColumns = 10;
 
     private static Brush Freeze(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 

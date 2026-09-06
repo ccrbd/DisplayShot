@@ -20,6 +20,8 @@ public sealed class OverlayCanvas : FrameworkElement
     private static readonly Pen DarkPen = FrozenPen(Color.FromArgb(128, 0, 0, 0), 1);
     private static readonly Pen HandleStroke = FrozenPen(Color.FromArgb(153, 0, 0, 0), 1);
     private static readonly Pen DashPen = MakeDashPen();
+    private static readonly Pen BorderDashPen = MakeBorderDashPen();
+    private static readonly Brush EraserFill = Frozen(Color.FromArgb(46, 255, 255, 255));
     private static readonly Typeface LabelTypeface = new(new FontFamily("Consolas"), FontStyles.Normal, FontWeights.Medium, FontStretches.Normal);
     private static readonly Typeface HintTypeface = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Medium, FontStretches.Normal);
 
@@ -35,6 +37,13 @@ public sealed class OverlayCanvas : FrameworkElement
     private static Pen MakeDashPen()
     {
         var p = new Pen(new SolidColorBrush(Color.FromArgb(204, 255, 255, 255)), 1) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) };
+        p.Freeze();
+        return p;
+    }
+
+    private static Pen MakeBorderDashPen()
+    {
+        var p = new Pen(Brushes.White, 1) { DashStyle = new DashStyle(new double[] { 4, 4 }, 0) };
         p.Freeze();
         return p;
     }
@@ -80,9 +89,13 @@ public sealed class OverlayCanvas : FrameworkElement
         }
         dc.Pop();
 
-        // Selection border (dark under, white over) and handles.
-        dc.DrawRectangle(null, DarkPen, Inflate(selection, 1.5));
-        dc.DrawRectangle(null, WhitePen, Inflate(selection, 0.5));
+        // Dotted selection border over a dark underlay so it reads on any background.
+        dc.DrawRectangle(null, DarkPen, Inflate(selection, 0.5));
+        dc.DrawRectangle(null, BorderDashPen, Inflate(selection, 0.5));
+        if (_session.EraserFootprint is { } eraser)
+        {
+            dc.DrawEllipse(EraserFill, DashPen, eraser.Center, eraser.Radius, eraser.Radius);
+        }
         if (_session.ShowsHandles)
         {
             foreach (var (_, rect) in _session.Selection!.HandleRects())
@@ -117,8 +130,8 @@ public sealed class OverlayCanvas : FrameworkElement
         var center = _session.Capture.CanvasRect(primary);
         var text = $"Drag to select an area   ·   Ctrl+A full screen   ·   Esc to cancel";
         var ft = new FormattedText(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, HintTypeface, 13 * primary.DpiScale, Brushes.White, primary.DpiScale);
-        // 10 % above centre so the box does not cover what people usually capture; translucent so the screen shows through.
-        var rect = new Rect(center.X + (center.Width - ft.Width) / 2 - 14, center.Y + center.Height * 0.40 - ft.Height / 2 - 8, ft.Width + 28, ft.Height + 16);
+        // A quarter of the way down the screen, clear of the centre people usually capture; translucent so the screen shows through.
+        var rect = new Rect(center.X + (center.Width - ft.Width) / 2 - 14, center.Y + center.Height * 0.25 - ft.Height / 2 - 8, ft.Width + 28, ft.Height + 16);
         dc.DrawRoundedRectangle(HintBrush, null, rect, 8, 8);
         dc.DrawText(ft, new Point(rect.X + 14, rect.Y + 8));
     }
