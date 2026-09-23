@@ -118,6 +118,19 @@ enum ImageComposerChecks {
                 try expectGreater(Int(drawn.data[idx]), 200)
                 try expectLess(Int(drawn.data[idx + 1]), 80)
             }
+            Checks.run("ellipse is drawn as an outline only") {
+                let cs = CGColorSpace(name: CGColorSpace.sRGB)!
+                let ctx = CGContext(data: nil, width: 200, height: 200, bitsPerComponent: 8, bytesPerRow: 0, space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+                ctx.setFillColor(CGColor(gray: 1, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: 200, height: 200))
+                let white = ctx.makeImage()!
+                let sel = CGRect(x: 0, y: 0, width: 100, height: 100)
+                let stroke = Stroke(color: CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1), width: 4)
+                let out = Pixels(try compose(white, sel, [Annotation(.ellipse(CGRect(x: 10, y: 10, width: 80, height: 60), stroke))]))
+                let top = 20 * out.bytesPerRow + 100 * 4       // (50,10) pt → on the outline
+                let centre = 80 * out.bytesPerRow + 100 * 4    // (50,40) pt → inside, untouched
+                try expectGreater(Int(out.data[top]), 200); try expectLess(Int(out.data[top + 1]), 80)
+                try expectEqual(Int(out.data[centre + 1]), 255, "centre stays white")
+            }
             Checks.run("annotations are clipped to the selection") {
                 let src = makeSource(width: 200, height: 100)
                 let sel = CGRect(x: 20, y: 20, width: 40, height: 20)

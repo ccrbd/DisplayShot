@@ -126,6 +126,22 @@ public class AnnotationTests
     }
 
     [Fact]
+    public void Ellipse_UpdateAndHitTesting()
+    {
+        var e = new EllipseAnnotation(new Rect(10, 10, 0, 0), S);
+        var dragged = (EllipseAnnotation)DrawingTools.Update(e, new Point(10, 10), new Point(90, 50), false);
+        Assert.Equal(new Rect(10, 10, 80, 40), dragged.Rect);
+        Assert.True(dragged.IsMeaningful);
+        var circle = (EllipseAnnotation)DrawingTools.Update(e, new Point(10, 10), new Point(90, 50), true);
+        Assert.Equal(circle.Rect.Width, circle.Rect.Height);
+        Assert.True(AnnotationHitTester.Hits(dragged, new Point(50, 10), 3));
+        Assert.True(AnnotationHitTester.Hits(dragged, new Point(90, 30), 3));
+        Assert.False(AnnotationHitTester.Hits(dragged, new Point(50, 30), 3));
+        Assert.False(AnnotationHitTester.Hits(dragged, new Point(12, 12), 2));
+        Assert.Equal(9, ((EllipseAnnotation)dragged.WithWidth(9)).Stroke.Width);
+    }
+
+    [Fact]
     public void SnapAngle_KeepsLength()
     {
         var snapped = DrawingTools.SnapAngle(new Point(0, 0), new Point(100, 8));

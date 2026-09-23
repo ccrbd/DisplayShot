@@ -44,6 +44,10 @@ public sealed class OverlaySession
     private Handle _activeHandle;
     private bool _finished;
     private RedactMode _redactMode;
+    private ShapeKind _shapeKind;
+    private Button? _shapeToolButton;
+    private DispatcherTimer? _holdTimer;
+    private bool _holdFired;
     private string _currentEmoji;
     private Guid? _lastEmojiId;
     private Guid _movingEmojiId;
@@ -79,6 +83,7 @@ public sealed class OverlaySession
         _colorIndex = settings.LastColorIndex >= 0 && settings.LastColorIndex < OverlayChrome.Palette.Length ? settings.LastColorIndex : 0;
         _color = OverlayChrome.Palette[_colorIndex ?? 0];
         _redactMode = settings.RedactMode;
+        _shapeKind = settings.ShapeKind;
         _currentEmoji = string.IsNullOrEmpty(settings.LastEmoji) ? "👍" : settings.LastEmoji;
     }
 
@@ -307,9 +312,19 @@ public sealed class OverlaySession
         var a = DrawingTools.Begin(tool, p, _color, WidthFor(tool), shift);
         if (a is null) return;
         if (a is RedactAnnotation ra) a = ra with { Mode = shift ? RedactMode.Blur : _redactMode };
+        if (a is RectangleAnnotation rc && _shapeKind == ShapeKind.Ellipse) a = new EllipseAnnotation(rc.Rect, rc.Stroke);
         _dragOrigin = p;
         InProgress = a;
         _phase = Phase.Drawing;
+    }
+
+    private void SetShapeKind(ShapeKind kind)
+    {
+        _shapeKind = kind;
+        _settings.ShapeKind = kind;
+        _settings.Save();
+        if (_tool != ToolKind.Rectangle) _tool = ToolKind.Rectangle;
+        Invalidate();
     }
 
     private void SetRedactMode(RedactMode mode)
@@ -724,6 +739,11 @@ public sealed class OverlaySession
         if (emojiX < 0) emojiX = layout.Palette.Right + ToolbarLayout.Gap;
         var emojiY = SelectionModel.Clamp(layout.Palette.Top, 0, Math.Max(0, _bounds.Height - emojiH));
         Place(_emojiStrip, new Rect(emojiX, emojiY, emojiW, emojiH));
+        if (_shapeToolButton?.Content is TextBlock shapeLabel)
+        {
+            shapeLabel.Text = _shapeKind.Glyph();
+            _shapeToolButton.ToolTip = $"{_shapeKind.Title()} (R) — right-click or hold to switch";
+        }
         if (_emojiToolButton?.Content is TextBlock emojiLabel)
         {
             emojiLabel.Text = _currentEmoji;
@@ -757,6 +777,46 @@ public sealed class OverlaySession
         foreach (var tool in ToolKindExtensions.All)
         {
             var button = OverlayChrome.ToolButton(tool);
+            if (tool == ToolKind.Rectangle)
+            {
+                _shapeToolButton = button;
+                if (button.Content is TextBlock stb) { stb.Text = _shapeKind.Glyph(); stb.FontFamily = new FontFamily("Segoe UI Symbol"); stb.FontSize = 15; }
+                var shapeMenu = new ContextMenu();
+                foreach (var kind in Enum.GetValues<ShapeKind>())
+                {
+                    var item = new MenuItem { Header = $"{kind.Glyph()}  {kind.Title()}", IsCheckable = true, IsChecked = kind == _shapeKind };
+                    var chosen = kind;
+                    item.Click += (_, _) => SetShapeKind(chosen);
+                    shapeMenu.Items.Add(item);
+                }
+                shapeMenu.Opened += (_, _) =>
+                {
+                    var i = 0;
+                    foreach (var mi in shapeMenu.Items.OfType<MenuItem>()) mi.IsChecked = Enum.GetValues<ShapeKind>()[i++] == _shapeKind;
+                };
+                button.ContextMenu = shapeMenu;
+                // Press-and-hold (450 ms) opens the same menu; a quick release is a normal click.
+                button.PreviewMouseLeftButtonDown += (_, _) =>
+                {
+                    _holdFired = false;
+                    _holdTimer?.Stop();
+                    _holdTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
+                    _holdTimer.Tick += (_, _) =>
+                    {
+                        _holdTimer!.Stop();
+                        _holdFired = true;
+                        shapeMenu.PlacementTarget = button;
+                        shapeMenu.IsOpen = true;
+                    };
+                    _holdTimer.Start();
+                };
+                button.PreviewMouseLeftButtonUp += (_, args) =>
+                {
+                    _holdTimer?.Stop();
+                    if (_holdFired) args.Handled = true;
+                };
+                button.MouseLeave += (_, _) => _holdTimer?.Stop();
+            }
             if (tool == ToolKind.Emoji)
             {
                 if (button.Content is TextBlock tb) { tb.Text = _currentEmoji; tb.FontFamily = new FontFamily("Segoe UI Emoji"); tb.FontSize = 15; }
@@ -764,7 +824,7 @@ public sealed class OverlaySession
                 _emojiToolButton = button;
             }
             var highlight = new Border { CornerRadius = new CornerRadius(6), Child = button, Margin = new Thickness(0, 1, 0, 1) };
-            button.Click += (_, _) => SelectTool(tool);
+            button.Click += (_, _) => { if (tool == ToolKind.Rectangle && _holdFired) { _holdFired = false; return; } SelectTool(tool); };
             if (tool == ToolKind.Redact)
             {
                 var menu = new ContextMenu();

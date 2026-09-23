@@ -42,6 +42,9 @@ class ChromeView: NSView {
 /// NSButton that also reports secondary clicks (used for the redaction mode menu).
 final class RightClickButton: NSButton {
     var onRightClick: ((NSButton) -> Void)?
+    /// Fires when the button is held down for `holdDelay` without releasing (press-and-hold menu).
+    var onHold: ((NSButton) -> Void)?
+    var holdDelay: TimeInterval = 0.45
 
     override func rightMouseDown(with event: NSEvent) {
         if let onRightClick { onRightClick(self) } else { super.rightMouseDown(with: event) }
@@ -49,7 +52,22 @@ final class RightClickButton: NSButton {
 
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.control), let onRightClick { onRightClick(self); return }
-        super.mouseDown(with: event)
+        guard let onHold, let window else { super.mouseDown(with: event); return }
+        // Track the press ourselves: a release before the delay is a normal click, otherwise hold.
+        isHighlighted = true
+        let deadline = Date(timeIntervalSinceNow: holdDelay)
+        while true {
+            guard let e = window.nextEvent(matching: [.leftMouseUp, .leftMouseDragged], until: deadline, inMode: .eventTracking, dequeue: true) else {
+                isHighlighted = false
+                onHold(self)
+                return
+            }
+            if e.type == .leftMouseUp {
+                isHighlighted = false
+                if bounds.contains(convert(e.locationInWindow, from: nil)) { performClick(nil) }
+                return
+            }
+        }
     }
 }
 
@@ -64,7 +82,9 @@ final class ToolPalette: ChromeView {
     var onUndo: (() -> Void)?
     var onSelectRedactMode: ((RedactMode) -> Void)?
     var onToggleEmojiPicker: (() -> Void)?
+    var onSelectShapeKind: ((ShapeKind) -> Void)?
     private var redactMode: RedactMode = .pixelate
+    private var shapeKind: ShapeKind = .rectangle
 
     private var toolButtons: [ToolKind: NSButton] = [:]
     private let colorButton = ChromeView.makeButton(symbol: "circle.fill", tooltip: "Colour (1–9)", target: nil, action: nil)
@@ -91,6 +111,10 @@ final class ToolPalette: ChromeView {
             toolButtons[tool] = b
             if tool == .redact, let rb = b as? RightClickButton {
                 rb.onRightClick = { [weak self] button in self?.showRedactMenu(from: button) }
+            }
+            if tool == .rectangle, let sb = b as? RightClickButton {
+                sb.onRightClick = { [weak self] button in self?.showShapeMenu(from: button) }
+                sb.onHold = { [weak self] button in self?.showShapeMenu(from: button) }
             }
             if tool == .emoji, let eb = b as? RightClickButton {
                 eb.image = nil
@@ -130,6 +154,23 @@ final class ToolPalette: ChromeView {
         menu.popUp(positioning: nil, at: CGPoint(x: button.bounds.maxX + 4, y: 0), in: button)
     }
 
+    private func showShapeMenu(from button: NSButton) {
+        let menu = NSMenu()
+        for (i, kind) in ShapeKind.allCases.enumerated() {
+            let item = NSMenuItem(title: kind.title, action: #selector(shapeKindChosen(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = i
+            item.image = ChromeView.symbolImage(kind.symbolName, pointSize: 12)
+            item.state = kind == shapeKind ? .on : .off
+            menu.addItem(item)
+        }
+        menu.popUp(positioning: nil, at: CGPoint(x: button.bounds.maxX + 4, y: 0), in: button)
+    }
+
+    @objc private func shapeKindChosen(_ sender: NSMenuItem) {
+        onSelectShapeKind?(ShapeKind.allCases[sender.tag])
+    }
+
     @objc private func redactModeChosen(_ sender: NSMenuItem) {
         onSelectRedactMode?(RedactMode.allCases[sender.tag])
     }
@@ -137,9 +178,14 @@ final class ToolPalette: ChromeView {
     @objc private func colorTapped() { onToggleColors?() }
     @objc private func undoTapped() { onUndo?() }
 
-    func update(selectedTool: ToolKind?, color: NSColor, canUndo: Bool, redactMode: RedactMode, emoji: String) {
+    func update(selectedTool: ToolKind?, color: NSColor, canUndo: Bool, redactMode: RedactMode, emoji: String, shapeKind: ShapeKind) {
         self.selectedTool = selectedTool
         self.redactMode = redactMode
+        if self.shapeKind != shapeKind || toolButtons[.rectangle]?.toolTip == nil {
+            self.shapeKind = shapeKind
+            toolButtons[.rectangle]?.image = ChromeView.symbolImage(shapeKind.symbolName)
+            toolButtons[.rectangle]?.toolTip = "\(shapeKind.title) (R) — right-click or hold to switch"
+        }
         if let eb = toolButtons[.emoji] {
             eb.title = emoji
             eb.toolTip = "Emoji \(emoji) (E) — right-click to choose another"

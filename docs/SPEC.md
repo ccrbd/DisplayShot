@@ -41,12 +41,14 @@ closes the overlay immediately (the user has decided not to take the shot).
 
 ## Tools
 
-Pen (freehand), Line, Arrow (filled head), Rectangle, Marker (highlighter), Text (inline), Emoji, Redact, Eraser.
+Pen (freehand), Line, Arrow (filled head), Rectangle/Ellipse, Marker (highlighter), Text (inline), Emoji, Redact, Eraser.
 
 - The mouse wheel changes the active tool's width (font size for Text/Emoji, block size for Redact).
   While it changes, a circle (block for Redact) of the real size in the tool colour is shown
   centred on the cursor next to the number. Each tool remembers its own width; widths persist.
-- Line and Arrow snap to 0/45/90° while Shift is held; Rectangle becomes a square.
+- Line and Arrow snap to 0/45/90° while Shift is held; Rectangle becomes a square (Ellipse a circle).
+- The rectangle tool has two shapes, rectangle and ellipse; right-click or press-and-hold the tool
+  button to switch. The button shows the current shape; the choice persists.
 - Marker strokes are composited as one layer at 35% with a multiply blend, so overlapping strokes
   never double-darken and text underneath stays legible.
 - Text commits on click-away or Ctrl/Cmd+Return; an empty text box is discarded.

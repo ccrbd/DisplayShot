@@ -51,6 +51,7 @@ final class OverlayView: NSView {
         palette.onUndo = { [weak self] in self?.session.undo() }
         palette.onSelectRedactMode = { [weak self] mode in self?.session.setRedactMode(mode) }
         palette.onToggleEmojiPicker = { [weak self] in self?.session.toggleEmojiPicker() }
+        palette.onSelectShapeKind = { [weak self] kind in self?.session.setShapeKind(kind) }
         emojiStrip.onPick = { [weak self] emoji in self?.session.setEmoji(emoji) }
         emojiStrip.onMore = { [weak self] in self?.session.beginEmojiPick() }
         actionBar.onCopy = { [weak self] in self?.session.copyToClipboard() }
@@ -274,7 +275,7 @@ final class OverlayView: NSView {
             if ex < bounds.minX { ex = layout.palette.maxX + ToolbarLayout.gap }
             emojiStrip.frame = CGRect(x: ex, y: ey, width: emojiSize.width, height: emojiSize.height).fitted(in: bounds)
 
-            palette.update(selectedTool: session.activeTool, color: session.color, canUndo: session.store.canUndo, redactMode: session.redactMode, emoji: session.currentEmoji)
+            palette.update(selectedTool: session.activeTool, color: session.color, canUndo: session.store.canUndo, redactMode: session.redactMode, emoji: session.currentEmoji, shapeKind: session.shapeKind)
             colorStrip.update(selectedIndex: session.colorIndex)
             emojiStrip.update(selected: session.currentEmoji)
         } else {

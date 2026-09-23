@@ -27,6 +27,7 @@ public sealed class Settings
     /// <summary>Format the save dialog defaults to; silent save always uses it.</summary>
     public ImageFormat SaveFormat { get; set; } = ImageFormat.Jpeg;
     public RedactMode RedactMode { get; set; } = RedactMode.Pixelate;
+    public ShapeKind ShapeKind { get; set; } = ShapeKind.Rectangle;
     public string LastEmoji { get; set; } = "👍";
 
     [JsonIgnore]

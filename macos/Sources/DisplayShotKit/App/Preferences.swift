@@ -20,6 +20,7 @@ final class Preferences {
         static let saveFormat = "saveFormat"
         static let redactMode = "redactMode"
         static let lastEmoji = "lastEmoji"
+        static let shapeKind = "shapeKind"
     }
 
     var hotKey: HotKey {
@@ -77,6 +78,11 @@ final class Preferences {
     var redactMode: RedactMode {
         get { RedactMode(rawValue: defaults.string(forKey: Key.redactMode) ?? "") ?? .pixelate }
         set { defaults.set(newValue.rawValue, forKey: Key.redactMode) }
+    }
+
+    var shapeKind: ShapeKind {
+        get { ShapeKind(rawValue: defaults.string(forKey: Key.shapeKind) ?? "") ?? .rectangle }
+        set { defaults.set(newValue.rawValue, forKey: Key.shapeKind) }
     }
 
     var lastEmoji: String {

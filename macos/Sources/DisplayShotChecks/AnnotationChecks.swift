@@ -97,6 +97,23 @@ enum AnnotationChecks {
                 try expectEqual(ToolKind.eraser.key, "d")
                 try expect(DrawingTools.begin(.eraser, at: .zero, color: CGColor(gray: 1, alpha: 1), width: 20, blur: false) == nil)
             }
+            Checks.run("ellipse: drag update, square constraint, hit-testing on the outline") {
+                let e = Annotation(.ellipse(CGRect(x: 10, y: 10, width: 0, height: 0), stroke))
+                let dragged = DrawingTools.update(e, origin: CGPoint(x: 10, y: 10), to: CGPoint(x: 90, y: 50), constrain: false)
+                guard case .ellipse(let r, _) = dragged.kind else { throw CheckFailure(description: "not ellipse") }
+                try expectEqual(r, CGRect(x: 10, y: 10, width: 80, height: 40))
+                try expect(dragged.isMeaningful)
+                let circle = DrawingTools.update(e, origin: CGPoint(x: 10, y: 10), to: CGPoint(x: 90, y: 50), constrain: true)
+                guard case .ellipse(let cr, _) = circle.kind else { throw CheckFailure(description: "not ellipse") }
+                try expectEqual(cr.width, cr.height)
+                try expect(AnnotationHitTester.hits(dragged, circleAt: CGPoint(x: 50, y: 10), radius: 3), "top of the outline")
+                try expect(AnnotationHitTester.hits(dragged, circleAt: CGPoint(x: 90, y: 30), radius: 3), "right of the outline")
+                try expectFalse(AnnotationHitTester.hits(dragged, circleAt: CGPoint(x: 50, y: 30), radius: 3), "centre is not on the outline")
+                try expectFalse(AnnotationHitTester.hits(dragged, circleAt: CGPoint(x: 12, y: 12), radius: 2), "corner of the box is outside the ellipse")
+                guard case .ellipse(_, let ws) = dragged.withWidth(9).kind else { throw CheckFailure(description: "not ellipse") }
+                try expectEqual(ws.width, 9)
+                try expectEqual(ShapeKind.ellipse.symbolName, "circle")
+            }
             Checks.run("store replace keeps order") {
                 let store = AnnotationStore()
                 store.add(line(1)); let target = line(2); store.add(target); store.add(line(3))

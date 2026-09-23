@@ -72,6 +72,14 @@ enum ToolKind: String, CaseIterable, Codable {
     }
 }
 
+/// What the rectangle tool draws; switched by right-clicking or holding the tool button.
+enum ShapeKind: String, Codable, CaseIterable {
+    case rectangle, ellipse
+
+    var title: String { self == .rectangle ? "Rectangle" : "Ellipse" }
+    var symbolName: String { self == .rectangle ? "rectangle" : "circle" }
+}
+
 enum RedactMode: String, Codable, CaseIterable {
     case pixelate, blur, blackout
 
@@ -116,6 +124,7 @@ struct Annotation: Identifiable {
         case line(CGPoint, CGPoint, Stroke)
         case arrow(CGPoint, CGPoint, Stroke)
         case rectangle(CGRect, Stroke)
+        case ellipse(CGRect, Stroke)
         case marker([CGPoint], Stroke)
         case text(TextAnnotation)
         case emoji(EmojiAnnotation)
@@ -146,7 +155,7 @@ struct Annotation: Identifiable {
         switch kind {
         case .pen(let pts, _), .marker(let pts, _): return !pts.isEmpty
         case .line(let a, let b, _), .arrow(let a, let b, _): return a.distance(to: b) >= 2
-        case .rectangle(let r, _), .redact(let r, _, _): return r.width >= 2 && r.height >= 2
+        case .rectangle(let r, _), .ellipse(let r, _), .redact(let r, _, _): return r.width >= 2 && r.height >= 2
         case .text(let t): return !t.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .emoji(let e): return !e.string.isEmpty && e.size > 0
         }
@@ -161,6 +170,7 @@ struct Annotation: Identifiable {
         case .line(let a, let b, var s): s.width = w; copy.kind = .line(a, b, s)
         case .arrow(let a, let b, var s): s.width = w; copy.kind = .arrow(a, b, s)
         case .rectangle(let r, var s): s.width = w; copy.kind = .rectangle(r, s)
+        case .ellipse(let r, var s): s.width = w; copy.kind = .ellipse(r, s)
         case .text(var t): t.fontSize = w; copy.kind = .text(t)
         case .emoji(var e): e.size = w; copy.kind = .emoji(e)
         case .redact(let r, let m, _): copy.kind = .redact(r, m, w)

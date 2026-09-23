@@ -7,6 +7,15 @@ public enum ToolKind { Pen, Line, Arrow, Rectangle, Marker, Text, Emoji, Redact,
 
 public enum RedactMode { Pixelate, Blur, Blackout }
 
+/// <summary>What the rectangle tool draws; switched by right-clicking or holding the tool button.</summary>
+public enum ShapeKind { Rectangle, Ellipse }
+
+public static class ShapeKindExtensions
+{
+    public static string Title(this ShapeKind k) => k == ShapeKind.Rectangle ? "Rectangle" : "Ellipse";
+    public static string Glyph(this ShapeKind k) => k == ShapeKind.Rectangle ? "▭" : "◯";
+}
+
 public static class RedactModeExtensions
 {
     public static string Title(this RedactMode mode) => mode switch
@@ -113,6 +122,12 @@ public sealed record ArrowAnnotation(Point From, Point To, Stroke Stroke) : Anno
 }
 
 public sealed record RectangleAnnotation(Rect Rect, Stroke Stroke) : Annotation
+{
+    public override bool IsMeaningful => Rect.Width >= 2 && Rect.Height >= 2;
+    public override Annotation WithWidth(double width) => this with { Stroke = Stroke with { Width = width } };
+}
+
+public sealed record EllipseAnnotation(Rect Rect, Stroke Stroke) : Annotation
 {
     public override bool IsMeaningful => Rect.Width >= 2 && Rect.Height >= 2;
     public override Annotation WithWidth(double width) => this with { Stroke = Stroke with { Width = width } };

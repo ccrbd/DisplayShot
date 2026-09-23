@@ -17,7 +17,8 @@ needed, and get it onto your clipboard or disk in a second. No accounts, no clou
 - **Global hotkey** freezes the screen behind a dimmed overlay, instantly.
 - **Selection** by click-and-drag, `⌘A` / `Ctrl+A` to snap to the full screen, eight resize handles,
   and drag to reposition. A live `W × H` readout follows the box.
-- **Annotation tools**: pen, line, arrow, rectangle, highlighter, inline text, emoji stamps
+- **Annotation tools**: pen, line, arrow, rectangle or ellipse (right-click or hold the tool to
+  switch), highlighter, inline text, emoji stamps
   (resize with the wheel, rotate with `[` / `]`, drag to move), and an eraser that removes any
   drawing, text or emoji it touches (undoable).
 - **Redaction**: mosaic (default), blur, or blackout to hide passwords, tokens and emails.
@@ -45,9 +46,9 @@ uses `⌥`).
 | Undo / redo | `⌘Z` / `⌘⇧Z` | `Ctrl+Z` / `Ctrl+Shift+Z` |
 | Cancel / close | `Esc` | `Esc` |
 | Pen / Line / Arrow | `P` / `L` / `A` | `P` / `L` / `A` |
-| Rectangle / Marker | `R` / `M` | `R` / `M` |
+| Rectangle or ellipse / Marker | `R` / `M` | `R` / `M` |
 | Text / Emoji / Redact / Eraser | `T` / `E` / `X` / `D` | `T` / `E` / `X` / `D` |
-| Choose emoji / redact mode | right-click the tool | right-click the tool |
+| Choose shape / emoji / redact mode | right-click (or hold) the tool | right-click (or hold) the tool |
 | Rotate last emoji | `[` / `]` or `⌥`+wheel | `[` / `]` or `Alt`+wheel |
 | Move tool (no drawing) | `V` | `V` |
 | Pick colour | `1`–`9` | `1`–`9` |
@@ -89,6 +90,17 @@ swift run DisplayShotChecks     # run the test suite
 
 `ARCHS="arm64 x86_64" ./scripts/build-app.sh` builds a universal binary. Icons are regenerated with
 `./assets/make-icons.sh`.
+
+**Signing and sharing.** When a "Developer ID Application" certificate is in the keychain,
+`build-app.sh` signs the app with it (hardened runtime, timestamp) instead of ad-hoc. Then
+`./scripts/make-dmg.sh` produces a signed `dist/DisplayShot-<version>.dmg` with an Applications
+shortcut. To also notarize it (so other Macs open it with no warning), store credentials once:
+
+```bash
+xcrun notarytool store-credentials DisplayShot --apple-id you@example.com --team-id TEAMID --password app-specific-password
+```
+
+`make-dmg.sh` detects the profile, submits the DMG, waits for approval and staples the ticket.
 
 ### Windows
 

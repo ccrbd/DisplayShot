@@ -33,11 +33,23 @@ public static class AnnotationHitTester
         LineAnnotation l => DistanceToSegment(p, l.From, l.To) <= r + Math.Max(l.Stroke.Width / 2, l.Stroke.Width * 1.6),
         ArrowAnnotation ar => DistanceToSegment(p, ar.From, ar.To) <= r + Math.Max(ar.Stroke.Width / 2, ar.Stroke.Width * 1.6),
         RectangleAnnotation rect => Outline(rect.Rect, p, r + rect.Stroke.Width / 2),
+        EllipseAnnotation el => EllipseOutline(el.Rect, p, r + el.Stroke.Width / 2),
         TextAnnotation t => Inflated(new Rect(t.Origin, AnnotationRenderer.MeasureText(t)), r).Contains(p),
         EmojiAnnotation e => Inflated(e.Bounds, r).Contains(p),
         RedactAnnotation rd => Inflated(rd.Rect, r).Contains(p),
         _ => false,
     };
+
+    /// <summary>Distance to the ellipse outline at the parametric angle of p.</summary>
+    private static bool EllipseOutline(Rect rect, Point p, double reach)
+    {
+        var a = rect.Width / 2; var b = rect.Height / 2;
+        if (a <= 0 || b <= 0) return false;
+        var cx = rect.X + a; var cy = rect.Y + b;
+        var angle = Math.Atan2((p.Y - cy) / b, (p.X - cx) / a);
+        var q = new Point(cx + a * Math.Cos(angle), cy + b * Math.Sin(angle));
+        return (p - q).Length <= reach;
+    }
 
     private static bool Outline(Rect rect, Point p, double reach)
     {

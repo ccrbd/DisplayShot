@@ -38,6 +38,8 @@ public static class DrawingTools
                 return arrow with { To = constrain ? SnapAngle(arrow.From, p) : p };
             case RectangleAnnotation rect:
                 return rect with { Rect = RectFrom(origin, p, constrain) };
+            case EllipseAnnotation ellipse:
+                return ellipse with { Rect = RectFrom(origin, p, constrain) };
             case RedactAnnotation redact:
                 // The mode is owned by the session (right-click choice / Shift); only the rect changes here.
                 return redact with { Rect = new Rect(origin, p) };

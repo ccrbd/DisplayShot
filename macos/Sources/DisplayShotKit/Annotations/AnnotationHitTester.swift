@@ -16,6 +16,14 @@ enum AnnotationHitTester {
             let tl = CGPoint(x: rect.minX, y: rect.minY), tr = CGPoint(x: rect.maxX, y: rect.minY)
             let bl = CGPoint(x: rect.minX, y: rect.maxY), br = CGPoint(x: rect.maxX, y: rect.maxY)
             return [(tl, tr), (tr, br), (br, bl), (bl, tl)].contains { distance(from: p, toSegment: $0.0, $0.1) <= reach }
+        case .ellipse(let rect, let s):
+            // Distance to the ellipse outline at the parametric angle of `p`.
+            let a = rect.width / 2, b = rect.height / 2
+            guard a > 0, b > 0 else { return false }
+            let c = rect.center
+            let angle = atan2((p.y - c.y) / b, (p.x - c.x) / a)
+            let q = CGPoint(x: c.x + a * cos(angle), y: c.y + b * sin(angle))
+            return p.distance(to: q) <= r + s.width / 2
         case .text(let t):
             let size = AnnotationRenderer.textSize(t)
             return CGRect(origin: t.origin, size: size).insetBy(dx: -r, dy: -r).contains(p)

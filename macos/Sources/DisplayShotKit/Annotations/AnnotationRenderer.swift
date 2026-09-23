@@ -52,6 +52,9 @@ enum AnnotationRenderer {
         case .rectangle(let r, let s):
             applyStroke(s, ctx)
             ctx.stroke(r)
+        case .ellipse(let r, let s):
+            applyStroke(s, ctx)
+            ctx.strokeEllipse(in: r)
         case .text(let t):
             drawText(t, in: ctx)
         case .emoji(let e):

@@ -33,6 +33,8 @@ enum DrawingTools {
             copy.kind = .arrow(a, constrain ? snapAngle(from: a, to: p) : p, s)
         case .rectangle(_, let s):
             copy.kind = .rectangle(rect(from: origin, to: p, square: constrain), s)
+        case .ellipse(_, let s):
+            copy.kind = .ellipse(rect(from: origin, to: p, square: constrain), s)
         case .redact(_, let mode, let block):
             // The mode is owned by the session (right-click choice / Shift); only the rect changes here.
             copy.kind = .redact(CGRect(corner: origin, p), mode, block)

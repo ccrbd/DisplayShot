@@ -64,6 +64,9 @@ public static class AnnotationRenderer
             case RectangleAnnotation rect:
                 dc.DrawRectangle(null, MakePen(rect.Stroke), rect.Rect);
                 break;
+            case EllipseAnnotation el:
+                dc.DrawEllipse(null, MakePen(el.Stroke), new Point(el.Rect.X + el.Rect.Width / 2, el.Rect.Y + el.Rect.Height / 2), el.Rect.Width / 2, el.Rect.Height / 2);
+                break;
             case TextAnnotation text:
                 DrawText(dc, text);
                 break;

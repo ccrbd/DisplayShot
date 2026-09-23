@@ -41,6 +41,7 @@ final class OverlaySession: NSObject {
     private(set) var isTextEditing = false
     private(set) var isEmojiPicking = false
     private(set) var redactMode: RedactMode
+    private(set) var shapeKind: ShapeKind
     private(set) var currentEmoji: String
     private var lastEmojiID: UUID?
     private(set) var isFinished = false
@@ -58,6 +59,7 @@ final class OverlaySession: NSObject {
         self.prefs = prefs
         widths = prefs.toolWidths
         redactMode = prefs.redactMode
+        shapeKind = prefs.shapeKind
         currentEmoji = prefs.lastEmoji
         let idx = prefs.lastColorIndex
         if idx >= 0 && idx < Palette.colors.count {
@@ -305,9 +307,17 @@ final class OverlaySession: NSObject {
     private func startDrawing(_ tool: ToolKind, at p: CGPoint) {
         guard var a = DrawingTools.begin(tool, at: p, color: color.cgColor, width: width(for: tool), blur: shiftDown) else { return }
         if case .redact(let r, _, let b) = a.kind { a.kind = .redact(r, shiftDown ? .blur : redactMode, b) }
+        if case .rectangle(let r, let s) = a.kind, shapeKind == .ellipse { a.kind = .ellipse(r, s) }
         drawOrigin = p
         inProgress = a
         phase = .drawing
+    }
+
+    func setShapeKind(_ kind: ShapeKind) {
+        shapeKind = kind
+        prefs.shapeKind = kind
+        if activeTool != .rectangle { activeTool = .rectangle }
+        refresh()
     }
 
     func setRedactMode(_ mode: RedactMode) {
