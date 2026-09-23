@@ -19,10 +19,9 @@ jobs:
       - name: Build app
         working-directory: macos
         run: swift run DisplayShotChecks && ./scripts/build-app.sh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos
-          path: macos/dist/DisplayShot-macOS-arm64.zip
+      # CI has no signing certificate, so this build is only a validation step. The macOS asset
+      # attached to the release is the Developer ID-signed, notarized DMG uploaded by
+      # scripts/publish-mac-dmg.sh from a machine that holds the certificate.
 
   windows:
     runs-on: windows-latest
@@ -55,6 +54,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/macos/DisplayShot-macOS-arm64.zip
             artifacts/windows/DisplayShot-Windows-x64.zip
           generate_release_notes: true
+          body: |
+            **macOS** (Apple Silicon, macOS 14+): download `DisplayShot-<version>.dmg` below — signed and notarized, drag to Applications.
+            **Windows** (10/11, x64): download and unzip `DisplayShot-Windows-x64.zip`; needs the .NET 8 Desktop Runtime.
